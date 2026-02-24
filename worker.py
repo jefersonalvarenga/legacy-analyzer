@@ -404,7 +404,7 @@ async def run_worker():
     # Configure DSPy/LLM once — captures fast_lm and consolidation_lm for KnowledgeConsolidator
     global _fast_lm, _consolidation_lm
     _fast_lm, _consolidation_lm = configure_lm(
-        openai_api_key=settings_local.openai_api_key,
+        openai_api_key=settings_local.llm_api_key,   # GLM_API_KEY se definido, senão OPENAI_API_KEY
         model=settings_local.llm_model,
         base_url=settings_local.openai_base_url,
         anthropic_api_key=settings_local.anthropic_api_key,

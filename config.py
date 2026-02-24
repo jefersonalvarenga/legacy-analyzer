@@ -9,8 +9,18 @@ class Settings(BaseSettings):
     supabase_url: str = Field(..., env="SUPABASE_URL")
     supabase_service_key: str = Field(..., env="SUPABASE_SERVICE_KEY")
 
-    # OpenAI
+    # OpenAI — usado exclusivamente para embeddings (text-embedding-3-small)
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
+
+    # LLM API key — usado para o modelo extrator (LLM_MODEL).
+    # Se GLM_API_KEY estiver definido, usa ele. Caso contrário, cai no OPENAI_API_KEY.
+    # Isso permite usar GLM-5 para extração mantendo OpenAI só para embeddings.
+    glm_api_key: Optional[str] = Field(None, env="GLM_API_KEY")
+
+    @property
+    def llm_api_key(self) -> str:
+        """API key efetiva para o modelo extrator (GLM_API_KEY > OPENAI_API_KEY)."""
+        return self.glm_api_key or self.openai_api_key
 
     # Application
     app_env: str = Field("development", env="APP_ENV")
