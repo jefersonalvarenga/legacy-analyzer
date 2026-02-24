@@ -36,6 +36,7 @@ from db import get_db
 from analyzer.parser import parse_archive, Conversation
 from analyzer.metrics import compute_metrics, aggregate_metrics, ConversationMetrics
 from analyzer.dspy_pipeline import analyze_conversation, configure_lm, SemanticAnalysis
+from analyzer.knowledge_consolidator import consolidate_knowledge, save_knowledge_to_supabase
 from analyzer.embeddings import EmbeddingClient
 from analyzer.report_builder import build_report
 from analyzer.training_export import (
@@ -51,6 +52,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+
+# LM references set once at startup and reused across all jobs
+_fast_lm = None
+_consolidation_lm = None
 
 
 # ------------------------------------------------------------------
@@ -234,7 +239,21 @@ async def process_job(job: dict):
                 "llm_model": settings.llm_model,
             }).execute()
 
-    _set_progress(job_id, 75, "Análise semântica concluída. Gerando embeddings...")
+    _set_progress(job_id, 73, "Análise semântica concluída. Consolidando base de conhecimento...")
+
+    # ------------------------------------------------------------------
+    # 4b. KnowledgeConsolidator — corpus-wide fact extraction
+    # ------------------------------------------------------------------
+    knowledge = consolidate_knowledge(
+        client_id=client_id,
+        clinic_name=clinic_name,
+        db=db,
+        fast_lm=_fast_lm,
+        consolidation_lm=_consolidation_lm,
+    )
+    save_knowledge_to_supabase(db, job_id, client_id, knowledge)
+
+    _set_progress(job_id, 75, "Base de conhecimento consolidada. Gerando embeddings...")
 
     # ------------------------------------------------------------------
     # 5. Embeddings
@@ -382,10 +401,14 @@ async def process_job(job: dict):
 async def run_worker():
     settings_local = get_settings()
 
-    # Configure DSPy/LLM once
-    configure_lm(
+    # Configure DSPy/LLM once — captures fast_lm and consolidation_lm for KnowledgeConsolidator
+    global _fast_lm, _consolidation_lm
+    _fast_lm, _consolidation_lm = configure_lm(
         openai_api_key=settings_local.openai_api_key,
         model=settings_local.llm_model,
+        base_url=settings_local.openai_base_url,
+        anthropic_api_key=settings_local.anthropic_api_key,
+        consolidator_model=settings_local.llm_model_consolidator,
     )
 
     logger.info(

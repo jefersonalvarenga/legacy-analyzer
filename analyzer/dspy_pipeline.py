@@ -235,36 +235,92 @@ _quality_module: Optional[QualityScorer] = None
 _summary_module: Optional[ConversationSummarizer] = None
 
 
-def configure_lm(openai_api_key: str, model: str = "gpt-4o-mini"):
+def build_lm(
+    model: str,
+    api_key: str,
+    base_url: Optional[str] = None,
+    temperature: float = 0.1,
+    max_tokens: int = 2048,
+) -> dspy.LM:
+    """
+    Build a DSPy LM instance. Supports:
+    - OpenAI: model="gpt-4o-mini", api_key=...
+    - Anthropic: model="anthropic/claude-sonnet-4-6", api_key=...
+    - OpenAI-compatible (GLM-4, Ollama): model="glm-4-flash", base_url=...
+    """
+    if base_url:
+        return dspy.LM(
+            model=f"openai/{model}",
+            api_key=api_key,
+            base_url=base_url,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+    if "/" in model:
+        # Already qualified (e.g. "anthropic/claude-sonnet-4-6")
+        return dspy.LM(
+            model=model,
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+    return dspy.LM(
+        model=f"openai/{model}",
+        api_key=api_key,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+
+
+def configure_lm(
+    openai_api_key: str,
+    model: str = "gpt-4o-mini",
+    base_url: Optional[str] = None,
+    anthropic_api_key: Optional[str] = None,
+    consolidator_model: str = "anthropic/claude-sonnet-4-6",
+):
     """
     Call once at startup to configure DSPy's language model.
-    Also initializes all other DSPy modules (outcome, shadow DNA, financial).
+    Also initializes all other DSPy modules (outcome, shadow DNA, financial,
+    knowledge consolidator).
+
+    Returns (fast_lm, consolidation_lm) for use in KnowledgeConsolidator.
     """
     global _sentiment_module, _topic_module, _quality_module, _summary_module
 
-    lm = dspy.LM(
-        model=f"openai/{model}",
-        api_key=openai_api_key,
-        temperature=0.1,
-        max_tokens=2048,
-    )
-    dspy.configure(lm=lm)
+    fast_lm = build_lm(model, openai_api_key, base_url=base_url)
+    dspy.configure(lm=fast_lm)
 
     _sentiment_module = SentimentAnalyzer()
     _topic_module = TopicExtractor()
     _quality_module = QualityScorer()
     _summary_module = ConversationSummarizer()
 
-    # Initialize new modules (import here to avoid circular imports)
+    # Initialize submodules (import here to avoid circular imports)
     from analyzer.outcome_detection import init_outcome_module
     from analyzer.shadow_dna import init_shadow_module
     from analyzer.financial_kpis import init_financial_module
+    from analyzer.knowledge_consolidator import init_knowledge_modules
 
     init_outcome_module()
     init_shadow_module()
     init_financial_module()
+    init_knowledge_modules()
 
     logger.info("DSPy configured with model: %s", model)
+
+    # Build consolidation LM (Claude by default, falls back to heavy OpenAI model)
+    consolidation_lm = None
+    if anthropic_api_key and consolidator_model.startswith("anthropic/"):
+        try:
+            consolidation_lm = build_lm(consolidator_model, anthropic_api_key)
+            logger.info("Consolidation LM: %s (Anthropic)", consolidator_model)
+        except Exception as e:
+            logger.warning("Failed to build Anthropic consolidation LM: %s — using fast LM", e)
+    else:
+        logger.info("No ANTHROPIC_API_KEY set — consolidation LM = fast LM (%s)", model)
+
+    return fast_lm, consolidation_lm
 
 
 def _conversation_to_text(messages) -> str:

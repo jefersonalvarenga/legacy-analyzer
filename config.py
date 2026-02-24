@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from functools import lru_cache
@@ -19,10 +20,23 @@ class Settings(BaseSettings):
     # Worker
     worker_poll_interval: int = Field(5, env="WORKER_POLL_INTERVAL")
 
+    # OpenAI-compatible base URL (for GLM-4, Ollama, etc.)
+    # Example for Zhipu GLM-4: https://open.bigmodel.cn/api/paas/v4/
+    openai_base_url: Optional[str] = Field(None, env="OPENAI_BASE_URL")
+
+    # Anthropic (used by KnowledgeConsolidator as final reviewer)
+    anthropic_api_key: Optional[str] = Field(None, env="ANTHROPIC_API_KEY")
+
     # Models
     embedding_model: str = Field("text-embedding-3-small", env="EMBEDDING_MODEL")
     llm_model: str = Field("gpt-4o-mini", env="LLM_MODEL")
     llm_model_heavy: str = Field("gpt-4o", env="LLM_MODEL_HEAVY")
+    # Consolidation LM: reviewer model for KnowledgeConsolidator final pass
+    # Set to "anthropic/claude-sonnet-4-6" when ANTHROPIC_API_KEY is set
+    # Falls back to llm_model_heavy if not configured
+    llm_model_consolidator: str = Field(
+        "anthropic/claude-sonnet-4-6", env="LLM_MODEL_CONSOLIDATOR"
+    )
 
     # Report output
     reports_output_dir: str = Field("./legacy-analyzer", env="REPORTS_OUTPUT_DIR")
