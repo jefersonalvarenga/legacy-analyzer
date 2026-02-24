@@ -1,0 +1,33 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.6
+pydantic-settings==2.7.1
+
+# Supabase
+supabase==2.13.0
+
+# OpenAI
+openai==1.61.0
+
+# DSPy
+dspy-ai==2.5.43
+
+# Data processing
+python-dotenv==1.0.1
+chardet==5.2.0
+
+# Report generation
+jinja2==3.1.5
+weasyprint==65.0
+
+# HTTP client
+httpx==0.28.1
+
+# Async
+anyio==4.8.0
+
+# Utilities
+python-dateutil==2.9.0
+pytz==2024.2
+tqdm==4.67.1

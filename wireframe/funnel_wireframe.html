@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EasyScale — Wireframe do Funil</title>
+  <style>
+    /* ── Reset & Base ───────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --brand:    #635BFF;
+      --brand2:   #00AFE1;
+      --dark:     #0F172A;
+      --surface:  #1E293B;
+      --muted:    #334155;
+      --text:     #F1F5F9;
+      --subtle:   #94A3B8;
+      --green:    #10B981;
+      --yellow:   #F59E0B;
+      --red:      #EF4444;
+      --radius:   12px;
+      --font:     'Inter', system-ui, sans-serif;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--dark);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    /* ── Navigation bar (wireframe meta) ───────────────────────────── */
+    #nav-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 999;
+      background: rgba(15,23,42,0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      overflow-x: auto;
+    }
+    #nav-bar span { color: var(--subtle); font-size: 11px; margin-right: 4px; white-space: nowrap; }
+    .nav-pill {
+      background: var(--muted);
+      color: var(--text);
+      border: 1px solid transparent;
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      text-decoration: none;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .nav-pill:hover, .nav-pill.active {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: #fff;
+    }
+
+    /* ── Screens ────────────────────────────────────────────────────── */
+    .screen {
+      min-height: 100vh;
+      padding: 90px 24px 60px;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .screen-label {
+      display: inline-block;
+      background: var(--muted);
+      color: var(--subtle);
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin-bottom: 10px;
+    }
+
+    /* ── Typography helpers ─────────────────────────────────────────── */
+    h1 { font-size: 2.2rem; font-weight: 800; line-height: 1.15; }
+    h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; }
+    h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 6px; }
+    p  { color: var(--subtle); margin-bottom: 12px; }
+    .em { color: var(--text); }
+
+    /* ── Cards ──────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--muted);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .card-sm {
+      background: var(--surface);
+      border: 1px solid var(--muted);
+      border-radius: 8px;
+      padding: 16px 20px;
+    }
+
+    /* ── Buttons ────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: var(--brand); color: #fff; }
+    .btn-secondary { background: var(--muted); color: var(--text); }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-lg { padding: 16px 36px; font-size: 17px; border-radius: 10px; }
+
+    /* ── Grid helpers ───────────────────────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    @media (max-width: 640px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+    /* ── Badge / pill ───────────────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-green  { background: rgba(16,185,129,.15); color: var(--green); }
+    .badge-yellow { background: rgba(245,158,11,.15);  color: var(--yellow); }
+    .badge-brand  { background: rgba(99,91,255,.15);   color: var(--brand); }
+
+    /* ── Divider ────────────────────────────────────────────────────── */
+    hr { border: none; border-top: 1px solid var(--muted); margin: 32px 0; }
+
+    /* ── Logo ───────────────────────────────────────────────────────── */
+    .logo {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--brand);
+      letter-spacing: -.03em;
+      margin-bottom: 4px;
+    }
+    .logo span { color: var(--brand2); }
+
+    /* ── Step indicator ─────────────────────────────────────────────── */
+    .steps {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 32px;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .step-dot {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step-dot.done   { background: var(--green); color: #fff; }
+    .step-dot.active { background: var(--brand); color: #fff; }
+    .step-dot.todo   { background: var(--muted); color: var(--subtle); }
+    .step-label { font-size: 12px; color: var(--subtle); white-space: nowrap; }
+    .step-connector {
+      flex: 1;
+      height: 2px;
+      background: var(--muted);
+      margin: 0 8px;
+      min-width: 16px;
+    }
+    .step-connector.done { background: var(--green); }
+
+    /* ── Upload area ────────────────────────────────────────────────── */
+    .upload-zone {
+      border: 2px dashed var(--brand);
+      border-radius: var(--radius);
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-bottom: 24px;
+    }
+    .upload-zone:hover { background: rgba(99,91,255,.06); }
+    .upload-icon { font-size: 40px; margin-bottom: 12px; }
+
+    /* ── Progress bar ───────────────────────────────────────────────── */
+    .progress-wrap { background: var(--muted); border-radius: 999px; height: 8px; overflow: hidden; margin: 12px 0; }
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--brand), var(--brand2));
+      transition: width 0.4s ease;
+    }
+
+    /* ── Whatsapp notification notice ──────────────────────────────── */
+    .wa-notice {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(37,211,102,.1);
+      border: 1px solid rgba(37,211,102,.25);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-top: 16px;
+      font-size: 14px;
+      color: #4ade80;
+    }
+    .wa-icon { font-size: 22px; }
+
+    /* ── KPI card strip ─────────────────────────────────────────────── */
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--muted);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+    }
+    .kpi-value { font-size: 2rem; font-weight: 800; color: var(--text); }
+    .kpi-label { font-size: 12px; color: var(--subtle); margin-top: 4px; }
+
+    /* ── Sticky CTA bar ─────────────────────────────────────────────── */
+    .sticky-cta {
+      position: sticky;
+      bottom: 0;
+      left: 0; right: 0;
+      background: rgba(15,23,42,0.97);
+      border-top: 1px solid var(--brand);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      z-index: 100;
+    }
+    .sticky-cta-text { font-size: 14px; color: var(--subtle); }
+    .sticky-cta-text strong { color: var(--text); }
+
+    /* ── Shadow chat ────────────────────────────────────────────────── */
+    .chat-window {
+      background: var(--surface);
+      border: 1px solid var(--muted);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      height: 520px;
+      overflow: hidden;
+    }
+    .chat-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .chat-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; color: #fff; flex-shrink: 0;
+    }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .msg { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
+    .msg-agent { background: var(--muted); color: var(--text); align-self: flex-start; border-radius: 12px 12px 12px 4px; }
+    .msg-user  { background: var(--brand); color: #fff; align-self: flex-end; border-radius: 12px 12px 4px 12px; }
+    .chat-input-row {
+      padding: 12px 14px;
+      border-top: 1px solid var(--muted);
+      display: flex;
+      gap: 8px;
+    }
+    .chat-input {
+      flex: 1;
+      background: var(--muted);
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+    .chat-input::placeholder { color: var(--subtle); }
+    .chat-input:focus { border-color: var(--brand); }
+    .chat-send {
+      background: var(--brand);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    /* ── Checkout ───────────────────────────────────────────────────── */
+    .plan-card {
+      background: var(--surface);
+      border: 2px solid var(--muted);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .plan-card:hover, .plan-card.selected { border-color: var(--brand); }
+    .plan-price { font-size: 2.2rem; font-weight: 800; color: var(--text); }
+    .plan-price span { font-size: 15px; font-weight: 400; color: var(--subtle); }
+    .plan-feature { font-size: 13px; color: var(--subtle); padding: 4px 0; }
+    .plan-feature::before { content: '✓ '; color: var(--green); font-weight: 700; }
+
+    /* ── Misc ───────────────────────────────────────────────────────── */
+    .mt-8  { margin-top: 8px; }
+    .mt-16 { margin-top: 16px; }
+    .mt-24 { margin-top: 24px; }
+    .mt-32 { margin-top: 32px; }
+    .mb-4  { margin-bottom: 4px; }
+    .mb-8  { margin-bottom: 8px; }
+    .mb-16 { margin-bottom: 16px; }
+    .text-center { text-align: center; }
+    .text-right  { text-align: right; }
+    .flex        { display: flex; }
+    .flex-center { display: flex; align-items: center; justify-content: center; }
+    .items-center{ align-items: center; }
+    .gap-8  { gap: 8px; }
+    .gap-16 { gap: 16px; }
+    .separator { height: 1px; background: var(--muted); margin: 12px 0; }
+    .small { font-size: 12px; color: var(--subtle); }
+
+    /* ── Annotation (wireframe notes) ──────────────────────────────── */
+    .annotation {
+      border-left: 3px solid var(--yellow);
+      background: rgba(245,158,11,.06);
+      border-radius: 0 6px 6px 0;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--yellow);
+      margin-top: 8px;
+    }
+    .annotation strong { color: #FDE68A; }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════
+     FIXED NAV BAR — jump between screens
+════════════════════════════════════════════════════════════════ -->
+<nav id="nav-bar">
+  <span>🔧 WIREFRAME</span>
+  <a class="nav-pill active" href="#screen-1">1 · Entrada</a>
+  <a class="nav-pill"        href="#screen-2">2 · Upload</a>
+  <a class="nav-pill"        href="#screen-3">3 · Analisando</a>
+  <a class="nav-pill"        href="#screen-4">4 · Relatório</a>
+  <a class="nav-pill"        href="#screen-5">5 · Shadow Mode</a>
+  <a class="nav-pill"        href="#screen-6">6 · Checkout</a>
+</nav>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     SCREEN 1 — ENTRADA / LANDING
+     O decisor recebe o magic link via WhatsApp e cai aqui.
+════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="screen-1">
+  <div class="screen-label">TELA 1 · ENTRADA — magic link</div>
+
+  <div style="margin-bottom:32px;">
+    <div class="logo">easy<span>scale</span></div>
+    <div class="small">Análise de Atendimento com IA</div>
+  </div>
+
+  <h1 style="margin-bottom:16px;">
+    Veja como o atendimento da<br/>
+    <span style="color:var(--brand);">Sorriso Da Gente</span><br/>
+    está performando — em 3 minutos.
+  </h1>
+
+  <p style="font-size:16px; margin-bottom:32px;">
+    Olá, <strong class="em">Dr. Rafael 👋</strong><br/>
+    Seu colega <strong class="em">Mariana (EasyScale)</strong> preparou uma análise
+    exclusiva das suas conversas de WhatsApp com pacientes.<br/>
+    Envie o arquivo de exportação para começar.
+  </p>
+
+  <div class="card" style="border-color:var(--brand);">
+    <h3 style="margin-bottom:4px;">O que você vai descobrir:</h3>
+    <div class="separator"></div>
+    <div class="grid-2" style="gap:12px; margin-top:12px;">
+      <div class="card-sm">📉 Taxa de conversão real de leads</div>
+      <div class="card-sm">👻 Quantos pacientes "ghostaram"</div>
+      <div class="card-sm">💬 Tempo médio de resposta</div>
+      <div class="card-sm">🤖 Simulação do seu atendente IA</div>
+    </div>
+  </div>
+
+  <div class="mt-24" style="display:flex; gap:16px; flex-wrap:wrap;">
+    <a href="#screen-2" class="btn btn-primary btn-lg">
+      Começar análise →
+    </a>
+    <button class="btn btn-secondary btn-lg">Ver exemplo</button>
+  </div>
+
+  <div class="annotation mt-24">
+    <strong>Auth:</strong> token no URL (<code>/demo/[slug]?t=TOKEN</code>) — sem senha, sem cadastro.<br/>
+    Token expira em 48h. Se expirado: tela "link expirado, fale com Mariana."
+  </div>
+
+  <hr/>
+
+  <!-- Closer tracking note -->
+  <div class="card-sm" style="border-color:var(--brand2); display:flex; gap:12px; align-items:center;">
+    <span style="font-size:24px;">📡</span>
+    <div>
+      <div style="font-size:13px; color:var(--brand2); font-weight:600;">Monitoramento do Closer</div>
+      <div class="small">Mariana recebe uma mensagem WhatsApp quando você entra aqui.
+      Ela acompanha seu progresso em tempo real.</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     SCREEN 2 — UPLOAD
+     Decisor envia o arquivo de exportação do WhatsApp.
+════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="screen-2">
+  <div class="screen-label">TELA 2 · UPLOAD</div>
+
+  <!-- Step progress -->
+  <div class="steps">
+    <div class="step-item">
+      <div class="step-dot done">✓</div>
+      <div class="step-label">Entrada</div>
+    </div>
+    <div class="step-connector done"></div>
+    <div class="step-item">
+      <div class="step-dot active">2</div>
+      <div class="step-label">Upload</div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item">
+      <div class="step-dot todo">3</div>
+      <div class="step-label">Análise</div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item">
+      <div class="step-dot todo">4</div>
+      <div class="step-label">Relatório</div>
+    </div>
+  </div>
+
+  <h2>Envie seu histórico de conversas</h2>
+  <p>Exporte o <strong class="em">Archive.zip</strong> do WhatsApp Business e envie abaixo.<br/>
+     Nenhum dado fica armazenado além do necessário para a análise.</p>
+
+  <div class="upload-zone" onclick="this.style.background='rgba(99,91,255,.1)'">
+    <div class="upload-icon">📦</div>
+    <div style="font-weight:600; margin-bottom:6px;">Arraste o arquivo aqui</div>
+    <div class="small">ou clique para selecionar</div>
+    <div class="small mt-8">Aceita: .zip · Tamanho máximo: 500 MB</div>
+  </div>
+
+  <div class="card-sm mb-16" style="display:flex; align-items:center; gap:12px;">
+    <span style="font-size:20px;">❓</span>
+    <div class="small">
+      <strong class="em">Como exportar?</strong>
+      WhatsApp Business → Configurações → Conversas → Exportar histórico de conversas → Exportar tudo → Enviar para e-mail → abrir Archive.zip.
+      <a href="#" style="color:var(--brand2);">Ver vídeo tutorial →</a>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:16px; flex-wrap:wrap;">
+    <a href="#screen-3" class="btn btn-primary">
+      Enviar e analisar →
+    </a>
+    <a href="#screen-1" class="btn btn-secondary">← Voltar</a>
+  </div>
+
+  <div class="annotation mt-24">
+    <strong>Fallback:</strong> Se o decisor não tiver o ZIP, exibir botão "Não tenho o arquivo —
+    solicitar acesso manual" → closer recebe alerta e faz o export pelo painel do WA Business.
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     SCREEN 3 — ANALISANDO
+     Pipeline rodando. UI deve evitar drop-off com notificação WA.
+════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="screen-3">
+  <div class="screen-label">TELA 3 · ANALISANDO</div>
+
+  <!-- Step progress -->
+  <div class="steps">
+    <div class="step-item">
+      <div class="step-dot done">✓</div>
+      <div class="step-label">Entrada</div>
+    </div>
+    <div class="step-connector done"></div>
+    <div class="step-item">
+      <div class="step-dot done">✓</div>
+      <div class="step-label">Upload</div>
+    </div>
+    <div class="step-connector done"></div>
+    <div class="step-item">
+      <div class="step-dot active">3</div>
+      <div class="step-label">Análise</div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step-item">
+      <div class="step-dot todo">4</div>
+      <div class="step-label">Relatório</div>
+    </div>
+  </div>
+
+  <div class="text-center mt-32" style="max-width:480px; margin:0 auto;">
+    <div style="font-size:52px; margin-bottom:16px; animation: spin 2s linear infinite;">⚙️</div>
+    <h2>Analisando suas conversas…</h2>
+    <p>Nossa IA está lendo e classificando suas conversas com pacientes.<br/>
+       Isso leva entre <strong class="em">2 e 5 minutos</strong>.</p>
+  </div>
+
+  <div class="card mt-32">
+    <div class="flex items-center gap-8 mb-16">
+      <span style="color:var(--green); font-size:18px;">✓</span>
+      <span class="small em">231 conversas carregadas</span>
+    </div>
+    <div class="flex items-center gap-8 mb-16">
+      <span style="font-size:18px;">⏳</span>
+      <span class="small em">Classificando desfechos… (78 / 231)</span>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-fill" style="width:34%"></div>
+    </div>
+    <div class="small" style="margin-top:6px; text-align:right;">34%</div>
+
+    <div class="separator"></div>
+
+    <div class="flex items-center gap-8" style="color:var(--subtle);">
+      <span style="font-size:16px;">⏳</span>
+      <span class="small">Extraindo perfil Shadow DNA…</span>
+    </div>
+    <div class="separator"></div>
+    <div class="flex items-center gap-8" style="color:var(--subtle);">
+      <span style="font-size:16px;">⏳</span>
+      <span class="small">Calculando KPIs financeiros…</span>
+    </div>
+  </div>
+
+  <!-- WhatsApp notification notice -->
+  <div class="wa-notice">
+    <div class="wa-icon">💬</div>
+    <div>
+      <strong>Pode fechar esta janela.</strong>
+      Quando a análise terminar, você vai receber uma mensagem no WhatsApp com o link para ver o relatório.
+      Tempo estimado: <strong>~3 min</strong>.
+    </div>
+  </div>
+
+  <div class="annotation mt-16">
+    <strong>n8n:</strong> Quando pipeline completa → trigger webhook → Evolution API envia WA para o decisor com link direto para Tela 4.<br/>
+    <strong>Frontend:</strong> Polling a cada 5s em <code>GET /demo/[slug]/status</code>. Redireciona automaticamente quando <code>status === "done"</code>.
+  </div>
+
+  <div class="mt-24 text-center">
+    <a href="#screen-4" class="btn btn-secondary">
+      [preview] Ver relatório →
+    </a>
+  </div>
+
+  <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .screen#screen-3 > div:nth-child(3) > div:first-child { display: inline-block; }
+  </style>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     SCREEN 4 — RELATÓRIO
+     Relatório completo + sticky CTA para conversão.
+════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="screen-4">
+  <div class="screen-label">TELA 4 · RELATÓRIO</div>
+
+  <!-- Top bar -->
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+    <div>
+      <div class="logo" style="font-size:18px;">easy<span>scale</span></div>
+      <h2 style="margin-bottom:0; margin-top:4px;">Relatório · Sorriso Da Gente</h2>
+      <div class="small">Gerado em 13 fev 2026 às 14:32 · 231 conversas</div>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn btn-secondary" style="font-size:13px; padding:8px 14px;">
+        🖨 Exportar PDF
+      </button>
+      <a href="#screen-5" class="btn btn-primary" style="font-size:13px; padding:8px 14px;">
+        🤖 Simular atendente →
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI strip -->
+  <div class="grid-3 mb-16" style="gap:12px;">
+    <div class="kpi-card">
+      <div class="kpi-value" style="color:var(--green);">23%</div>
+      <div class="kpi-label">Taxa de Conversão</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" style="color:var(--red);">38%</div>
+      <div class="kpi-label">Taxa de Ghosting</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" style="color:var(--yellow);">R$ 41.400</div>
+      <div class="kpi-label">Perda estimada / mês</div>
+    </div>
+  </div>
+
+  <!-- Recovery highlight -->
+  <div class="card" style="border-color:var(--green); margin-bottom:16px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span style="font-size:32px;">💰</span>
+      <div>
+        <div style="font-weight:700; font-size:18px; color:var(--green);">+R$ 12.420 / mês de recuperação potencial</div>
+        <div class="small">Automatizando o follow-up dos 88 leads perdidos por ghosting com um agente IA treinado no seu perfil.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report preview (truncated) -->
+  <div class="card" style="background: rgba(30,41,59,.6); position:relative; overflow:hidden; max-height: 320px;">
+    <h3>📊 Distribuição de Desfechos</h3>
+    <div class="separator"></div>
+    <div class="grid-3" style="gap:10px; margin-bottom:12px;">
+      <div class="card-sm text-center">
+        <div style="font-size:1.4rem; font-weight:800; color:var(--green);">53</div>
+        <div class="small">Agendados</div>
+      </div>
+      <div class="card-sm text-center">
+        <div style="font-size:1.4rem; font-weight:800; color:var(--red);">88</div>
+        <div class="small">Ghosting</div>
+      </div>
+      <div class="card-sm text-center">
+        <div style="font-size:1.4rem; font-weight:800; color:var(--yellow);">41</div>
+        <div class="small">Objeções Ativas</div>
+      </div>
+    </div>
+    <div class="small text-center" style="margin-bottom:8px; color:var(--subtle);">
+      [Gráfico de rosca Chart.js aqui]
+    </div>
+
+    <!-- Fade overlay suggesting more content below -->
+    <div style="
+      position:absolute; bottom:0; left:0; right:0; height:120px;
+      background: linear-gradient(to bottom, transparent, #1E293B);
+      display:flex; align-items:flex-end; justify-content:center; padding-bottom:12px;
+    ">
+      <span class="small" style="opacity:.7;">↓ relatório completo disponível abaixo ↓</span>
+    </div>
+  </div>
+
+  <div class="annotation mt-16">
+    <strong>Conteúdo:</strong> O relatório aqui é o HTML completo gerado pelo <code>report_builder.py</code>,
+    renderizado em <code>&lt;iframe&gt;</code> ou embutido diretamente.<br/>
+    <strong>Persistência:</strong> Resultado salvo em <code>la_demo_sessions.report_json</code> para reaquecimento futuro.
+  </div>
+
+  <!-- Sticky CTA bar -->
+  <div class="sticky-cta mt-24">
+    <div class="sticky-cta-text">
+      <strong>Quer automatizar esses follow-ups?</strong><br/>
+      Um agente IA treinado no perfil da Sorriso Da Gente pode recuperar até R$ 12.420/mês.
+    </div>
+    <a href="#screen-6" class="btn btn-green btn-lg">
+      Contratar EasyScale →
+    </a>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     SCREEN 5 — SHADOW MODE (chat ao vivo)
+     Decisor interage com o agente IA treinado no perfil da clínica.
+════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="screen-5">
+  <div class="screen-label">TELA 5 · SHADOW MODE — simulação ao vivo</div>
+
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+    <a href="#screen-4" style="color:var(--subtle); font-size:13px; text-decoration:none;">← Voltar ao relatório</a>
+  </div>
+
+  <h2 style="margin-bottom:4px;">🤖 Converse com o seu futuro agente IA</h2>
+  <p style="margin-bottom:20px;">
+    Este agente foi treinado com o perfil de comunicação real da <strong class="em">Sorriso Da Gente</strong>.
+    Envie mensagens como se fosse um paciente e veja como ele responderia.
+  </p>
+
+  <!-- Agent info strip -->
+  <div class="card-sm flex items-center gap-16 mb-16" style="justify-content:space-between; flex-wrap:wrap;">
+    <div class="flex items-center gap-8">
+      <div class="chat-avatar">S</div>
+      <div>
+        <div style="font-weight:600;">Sofia — Atendente IA</div>
+        <div class="small">Tom: Empático · Clínica: Sorriso Da Gente</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div class="badge badge-green">● online</div>
+      <div class="badge badge-brand">Shadow Mode</div>
+    </div>
+  </div>
+
+  <!-- Chat window -->
+  <div class="chat-window">
+    <div class="chat-header">
+      <div class="chat-avatar">S</div>
+      <div>
+        <div style="font-size:14px; font-weight:600;">Sofia · Sorriso Da Gente</div>
+        <div class="small" style="color:var(--green);">● digitando…</div>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chat-msgs">
+      <div class="msg msg-agent">
+        Olá! 😊 Bem-vindo à Sorriso Da Gente! Aqui é a Sofia, posso te ajudar?
+      </div>
+      <div class="msg msg-user">
+        Boa tarde! Queria saber sobre limpeza de pele, vocês fazem?
+      </div>
+      <div class="msg msg-agent">
+        Boa tarde! Sim, fazemos limpeza de pele 🌟 Temos horários disponíveis essa semana.
+        Qual o melhor horário pra você? Manhã ou tarde?
+      </div>
+      <div class="msg msg-user">
+        Quanto custa?
+      </div>
+      <div class="msg msg-agent">
+        A limpeza de pele completa é R$ 180 😊 Aceitamos cartão, Pix ou parcelamos em até 3x sem juros.
+        Quer que eu verifique a agenda?
+      </div>
+    </div>
+
+    <div class="chat-input-row">
+      <input
+        class="chat-input"
+        id="chat-input"
+        type="text"
+        placeholder="Digite como se fosse um paciente…"
+        onkeydown="handleChat(event)"
+      />
+      <button class="chat-send" onclick="sendChatMsg()">➤</button>
+    </div>
+  </div>
+
+  <div class="annotation mt-16">
+    <strong>Backend:</strong> <code>POST /demo/[slug]/shadow</code> com <code>{ message, history }</code>.
+    Usa <code>openai.chat.completions.create()</code> com o system prompt do blueprint.
+    Streaming com Server-Sent Events (SSE) para efeito de digitação.
+  </div>
+
+  <!-- CTA -->
+  <div class="card mt-24" style="border-color:var(--brand); text-align:center;">
+    <h3 style="margin-bottom:8px;">Gostou do agente? 🚀</h3>
+    <p style="margin-bottom:16px;">Contrate a EasyScale e deploy em 48h no WhatsApp da Sorriso Da Gente.</p>
+    <a href="#screen-6" class="btn btn-primary btn-lg">Ver planos →</a>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     SCREEN 6 — CHECKOUT / PLANOS
+     Conversão final.
+════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="screen-6">
+  <div class="screen-label">TELA 6 · CHECKOUT</div>
+
+  <div style="text-align:center; margin-bottom:32px;">
+    <div class="logo" style="font-size:28px; margin-bottom:8px;">easy<span>scale</span></div>
+    <h1 style="font-size:1.8rem; margin-bottom:8px;">Escolha seu plano</h1>
+    <p>Sem contrato. Cancele quando quiser.</p>
+  </div>
+
+  <div class="grid-2 mb-24" style="gap:20px; max-width:680px; margin:0 auto 24px;">
+
+    <!-- Plano Starter -->
+    <div class="plan-card">
+      <div style="font-weight:700; font-size:16px; margin-bottom:4px;">Starter</div>
+      <div class="plan-price">R$ 497<span>/mês</span></div>
+      <div class="separator"></div>
+      <div class="plan-feature">1 clínica</div>
+      <div class="plan-feature">Agente IA no WhatsApp</div>
+      <div class="plan-feature">Relatório mensal</div>
+      <div class="plan-feature">Shadow Mode</div>
+      <div class="plan-feature">Suporte via WhatsApp</div>
+      <div class="mt-16">
+        <button class="btn btn-secondary" style="width:100%; justify-content:center;">
+          Escolher Starter
+        </button>
+      </div>
+    </div>
+
+    <!-- Plano Pro (destacado) -->
+    <div class="plan-card selected">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+        <span style="font-weight:700; font-size:16px;">Pro</span>
+        <span class="badge badge-brand">Recomendado</span>
+      </div>
+      <div class="plan-price">R$ 997<span>/mês</span></div>
+      <div class="separator"></div>
+      <div class="plan-feature">Até 3 clínicas</div>
+      <div class="plan-feature">Tudo do Starter</div>
+      <div class="plan-feature">Onboarding dedicado</div>
+      <div class="plan-feature">Dashboard closer em tempo real</div>
+      <div class="plan-feature">Relatórios semanais automáticos</div>
+      <div class="mt-16">
+        <button class="btn btn-primary" style="width:100%; justify-content:center;">
+          Escolher Pro →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Social proof -->
+  <div class="card text-center" style="max-width:680px; margin:0 auto 24px;">
+    <div style="font-size:24px; margin-bottom:8px;">⭐⭐⭐⭐⭐</div>
+    <p style="color:var(--text); font-style:italic; margin-bottom:8px;">
+      "Em 2 semanas o agente já havia recuperado R$ 8.000 em agendamentos que teriam ghostado."
+    </p>
+    <div class="small">— Dr. Carlos, Clínica OralMax · São Paulo</div>
+  </div>
+
+  <div class="annotation" style="max-width:680px; margin:0 auto;">
+    <strong>Próximo passo:</strong> Botão "Escolher" → Stripe Checkout (ou redireciona para closer via WA se for high-touch).<br/>
+    <strong>Closer alert:</strong> n8n dispara WA para o closer quando decisor chega nessa tela — oportunidade de ligação imediata.
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     MINIMAL CHAT INTERACTIVITY (for demo)
+════════════════════════════════════════════════════════════════ -->
+<script>
+  // Highlight active nav pill on scroll
+  const sections = document.querySelectorAll('.screen');
+  const pills = document.querySelectorAll('.nav-pill');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        pills.forEach(p => p.classList.remove('active'));
+        const id = e.target.id.replace('screen-', '');
+        const pill = document.querySelector(`.nav-pill[href="#screen-${id}"]`);
+        if (pill) pill.classList.add('active');
+      }
+    });
+  }, { threshold: 0.4 });
+
+  sections.forEach(s => observer.observe(s));
+
+  // Fake chat interaction
+  const demoReplies = [
+    "Claro! Vou verificar na nossa agenda. Pode ser amanhã às 10h ou quinta às 14h30. Qual prefere? 😊",
+    "Ótimo! Qual o seu nome para confirmar o agendamento?",
+    "Perfeito! Agendamento confirmado ✅ Te mando a localização e o link do mapa agora.",
+    "Qualquer dúvida estou à disposição! Até lá 🌟",
+    "Vou verificar e te retorno em breve 😊",
+  ];
+  let replyIdx = 0;
+
+  function sendChatMsg() {
+    const input = document.getElementById('chat-input');
+    const msgs = document.getElementById('chat-msgs');
+    const text = input.value.trim();
+    if (!text) return;
+
+    // User message
+    const userDiv = document.createElement('div');
+    userDiv.className = 'msg msg-user';
+    userDiv.textContent = text;
+    msgs.appendChild(userDiv);
+    input.value = '';
+    msgs.scrollTop = msgs.scrollHeight;
+
+    // Agent reply (simulated delay)
+    setTimeout(() => {
+      const agentDiv = document.createElement('div');
+      agentDiv.className = 'msg msg-agent';
+      agentDiv.textContent = demoReplies[replyIdx % demoReplies.length];
+      replyIdx++;
+      msgs.appendChild(agentDiv);
+      msgs.scrollTop = msgs.scrollHeight;
+    }, 900);
+  }
+
+  function handleChat(e) {
+    if (e.key === 'Enter') sendChatMsg();
+  }
+
+  // Animate progress bar on screen 3
+  let progress = 34;
+  setInterval(() => {
+    const fill = document.querySelector('.progress-fill');
+    if (fill && progress < 98) {
+      progress += Math.random() * 2;
+      fill.style.width = Math.min(progress, 98) + '%';
+      const label = fill.closest('.card')?.querySelector('.small[style*="text-align:right"]');
+      if (label) label.textContent = Math.round(Math.min(progress, 98)) + '%';
+    }
+  }, 1500);
+</script>
+
+</body>
+</html>
