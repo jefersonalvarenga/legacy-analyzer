@@ -28,6 +28,8 @@ Called by worker.py after DSPy semantic analysis, before report building.
 
 import json
 import logging
+import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -36,8 +38,17 @@ import dspy
 logger = logging.getLogger(__name__)
 
 # Number of clinic messages per extraction batch.
-# Keep ≤100 to stay safely within context limits for cheap models.
 BATCH_SIZE = 80
+
+# Max messages to process after dedup + stratified sampling.
+# 6000 = ~75 batches. After dedup, covers virtually all unique content.
+MAX_MESSAGES = 6000
+
+# Concurrent batches in Phase 1. GLM API typically allows 5-10 concurrent.
+MAX_WORKERS = 8
+
+# Supabase page size for fetching messages
+DB_PAGE_SIZE = 1000
 
 
 # ------------------------------------------------------------------
@@ -283,19 +294,27 @@ def consolidate_knowledge(
     result = ConsolidatedKnowledge()
 
     # ------------------------------------------------------------------
-    # Fetch all clinic messages from Supabase
+    # Fetch ALL clinic messages from Supabase (paginated)
     # ------------------------------------------------------------------
     logger.info("[KC] Fetching clinic messages for client %s...", client_id[:8])
+    messages: list[dict] = []
     try:
-        msg_result = (
-            db.table("la_messages")
-            .select("content, sender, sender_type, sent_at")
-            .eq("client_id", client_id)
-            .eq("sender_type", "clinic")
-            .order("sent_at")
-            .execute()
-        )
-        messages = msg_result.data or []
+        offset = 0
+        while True:
+            page = (
+                db.table("la_messages")
+                .select("content, sender, sender_type, sent_at")
+                .eq("client_id", client_id)
+                .eq("sender_type", "clinic")
+                .order("sent_at")
+                .range(offset, offset + DB_PAGE_SIZE - 1)
+                .execute()
+            )
+            rows = page.data or []
+            messages.extend(rows)
+            if len(rows) < DB_PAGE_SIZE:
+                break
+            offset += DB_PAGE_SIZE
     except Exception as e:
         result.error = f"DB fetch error: {e}"
         logger.error("[KC] %s", result.error)
@@ -306,11 +325,44 @@ def consolidate_knowledge(
         logger.warning("[KC] %s", result.error)
         return result
 
-    total_msgs = len(messages)
-    logger.info("[KC] %d clinic messages to process in batches of %d.", total_msgs, BATCH_SIZE)
+    total_raw = len(messages)
 
     # ------------------------------------------------------------------
-    # Phase 1: Bulk Extraction (per batch, fast LLM)
+    # Deduplicate + stratified sample
+    # Clinic messages have many exact duplicates (boilerplate greetings, etc.)
+    # Stratified sample preserves temporal coverage (catches MetLife-style drops)
+    # ------------------------------------------------------------------
+    seen_content: set[str] = set()
+    unique_messages: list[dict] = []
+    for m in messages:
+        c = (m.get("content") or "").strip()
+        if c and c not in seen_content:
+            seen_content.add(c)
+            unique_messages.append(m)
+
+    total_unique = len(unique_messages)
+    logger.info("[KC] %d total → %d unique messages after dedup.", total_raw, total_unique)
+
+    # Stratified sample: first 20% + last 20% (time-aware) + random middle
+    if total_unique > MAX_MESSAGES:
+        head_n = MAX_MESSAGES // 5          # 20% from start (historical)
+        tail_n = MAX_MESSAGES // 5          # 20% from end (recent changes)
+        mid_n  = MAX_MESSAGES - head_n - tail_n
+        head   = unique_messages[:head_n]
+        tail   = unique_messages[-tail_n:]
+        middle = unique_messages[head_n:-tail_n]
+        mid_sample = random.sample(middle, min(mid_n, len(middle)))
+        sampled = head + mid_sample + tail
+        sampled.sort(key=lambda m: m.get("sent_at", ""))  # restore chronological order
+        logger.info("[KC] Sampled %d/%d unique messages (stratified).", len(sampled), total_unique)
+    else:
+        sampled = unique_messages
+
+    total_msgs = len(sampled)
+    logger.info("[KC] Processing %d messages in batches of %d.", total_msgs, BATCH_SIZE)
+
+    # ------------------------------------------------------------------
+    # Phase 1: Parallel bulk extraction (ThreadPoolExecutor)
     # ------------------------------------------------------------------
     all_insurances: list[str] = []
     all_address_hints: list[str] = []
@@ -318,32 +370,49 @@ def consolidate_knowledge(
     all_payment_hints: list[str] = []
     all_procedure_hints: list[str] = []
 
-    batches = [messages[i: i + BATCH_SIZE] for i in range(0, total_msgs, BATCH_SIZE)]
-    logger.info("[KC] Running Phase 1 extraction: %d batches...", len(batches))
+    batches = [sampled[i: i + BATCH_SIZE] for i in range(0, total_msgs, BATCH_SIZE)]
+    total_batches = len(batches)
+    logger.info("[KC] Phase 1: %d batches, %d workers...", total_batches, MAX_WORKERS)
 
-    for batch_idx, batch in enumerate(batches):
+    def _extract_batch(args: tuple) -> tuple[int, dict | None]:
+        batch_idx, batch = args
         batch_text = _build_batch_text(batch)
         if not batch_text.strip():
-            continue
-
+            return batch_idx, None
         try:
             if fast_lm:
                 with dspy.context(lm=fast_lm):
                     pred = _extractor(messages_text=batch_text, clinic_name=clinic_name)
             else:
                 pred = _extractor(messages_text=batch_text, clinic_name=clinic_name)
-
-            all_insurances.extend(_safe_list(pred.insurances, []))
-            all_address_hints.extend(_safe_list(pred.address_hints, []))
-            all_hours_hints.extend(_safe_list(pred.hours_hints, []))
-            all_payment_hints.extend(_safe_list(pred.payment_hints, []))
-            all_procedure_hints.extend(_safe_list(pred.procedure_hints, []))
-
+            return batch_idx, {
+                "insurances":     _safe_list(pred.insurances, []),
+                "address_hints":  _safe_list(pred.address_hints, []),
+                "hours_hints":    _safe_list(pred.hours_hints, []),
+                "payment_hints":  _safe_list(pred.payment_hints, []),
+                "procedure_hints": _safe_list(pred.procedure_hints, []),
+            }
         except Exception as e:
-            logger.warning("[KC] Batch %d/%d extraction failed: %s", batch_idx + 1, len(batches), e)
+            logger.warning("[KC] Batch %d/%d failed: %s", batch_idx + 1, total_batches, e)
+            return batch_idx, None
 
-        if (batch_idx + 1) % 10 == 0:
-            logger.info("[KC] Phase 1 progress: %d/%d batches", batch_idx + 1, len(batches))
+    completed = 0
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {
+            executor.submit(_extract_batch, (i, b)): i
+            for i, b in enumerate(batches)
+        }
+        for future in as_completed(futures):
+            _, extraction = future.result()
+            completed += 1
+            if extraction:
+                all_insurances.extend(extraction["insurances"])
+                all_address_hints.extend(extraction["address_hints"])
+                all_hours_hints.extend(extraction["hours_hints"])
+                all_payment_hints.extend(extraction["payment_hints"])
+                all_procedure_hints.extend(extraction["procedure_hints"])
+            if completed % 10 == 0 or completed == total_batches:
+                logger.info("[KC] Phase 1: %d/%d batches done", completed, total_batches)
 
     # Count insurance mentions across all content for confidence signal
     all_content = [m.get("content", "") for m in messages]
