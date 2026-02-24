@@ -44,8 +44,10 @@ BATCH_SIZE = 80
 # 6000 = ~75 batches. After dedup, covers virtually all unique content.
 MAX_MESSAGES = 6000
 
-# Concurrent batches in Phase 1. GLM API typically allows 5-10 concurrent.
-MAX_WORKERS = 8
+# Concurrent batches in Phase 1.
+# Free tier (GLM-4.7-Flash): use 3 — evita 429s com RPM baixo
+# Paid tier (GLM-4.7, GPT-4o-mini): pode usar 8-10
+MAX_WORKERS = 3
 
 # Supabase page size for fetching messages
 DB_PAGE_SIZE = 1000
