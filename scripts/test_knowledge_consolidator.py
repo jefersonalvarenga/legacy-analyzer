@@ -3,13 +3,16 @@ Teste standalone do KnowledgeConsolidator contra dados existentes da sgen.
 Roda direto — não precisa de um job no worker.
 
 Uso:
-  python scripts/test_knowledge_consolidator.py
+  python scripts/test_knowledge_consolidator.py            # run completo
+  python scripts/test_knowledge_consolidator.py --sample   # 400 msgs (validação rápida)
 """
 
 import sys
 import json
 import logging
 sys.path.insert(0, ".")
+
+QUICK_SAMPLE = "--sample" in sys.argv  # 400 msgs → 5 batches para validação de qualidade
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,6 +43,7 @@ def main():
     logger.info("Extractor LLM : %s", settings.llm_model)
     logger.info("Base URL      : %s", settings.openai_base_url or "(OpenAI default)")
     logger.info("Consolidator  : %s", settings.llm_model_consolidator)
+    logger.info("Mode          : %s", "QUICK SAMPLE (400 msgs)" if QUICK_SAMPLE else "FULL RUN")
 
     # 1. Configure DSPy + build LM instances
     fast_lm, consolidation_lm = configure_lm(
@@ -67,6 +71,12 @@ def main():
         sys.exit(1)
 
     # 3. Run consolidation
+    # --sample mode: override MAX_MESSAGES to 400 for quick quality validation
+    if QUICK_SAMPLE:
+        import analyzer.knowledge_consolidator as kc_mod
+        kc_mod.MAX_MESSAGES = 400
+        logger.info("Quick sample mode: MAX_MESSAGES overridden to 400")
+
     logger.info("Starting consolidation...")
     result = consolidate_knowledge(
         client_id=SGEN_CLIENT_ID,
