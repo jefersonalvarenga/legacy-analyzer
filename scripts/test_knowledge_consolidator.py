@@ -74,8 +74,8 @@ def main():
     # --sample mode: override MAX_MESSAGES to 400 for quick quality validation
     if QUICK_SAMPLE:
         import analyzer.knowledge_consolidator as kc_mod
-        kc_mod.MAX_MESSAGES = 400
-        logger.info("Quick sample mode: MAX_MESSAGES overridden to 400")
+        kc_mod.MAX_MESSAGES = 2000  # ~100 conversas × 20 msgs de clínica
+        logger.info("Quick sample mode: MAX_MESSAGES overridden to 2000 (~100 conversas)")
 
     logger.info("Starting consolidation...")
     result = consolidate_knowledge(

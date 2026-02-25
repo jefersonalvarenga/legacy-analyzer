@@ -38,6 +38,7 @@ from analyzer.metrics import compute_metrics, aggregate_metrics, ConversationMet
 from analyzer.dspy_pipeline import analyze_conversation, configure_lm, SemanticAnalysis
 from analyzer.knowledge_consolidator import consolidate_knowledge, save_knowledge_to_supabase
 from analyzer.embeddings import EmbeddingClient
+from notifier import notify_job_done, notify_job_failed
 from analyzer.report_builder import build_report
 from analyzer.training_export import (
     export_openai_jsonl,
@@ -75,9 +76,17 @@ def _set_progress(job_id: str, progress: int, step: str):
     _update_job(job_id, progress=progress, current_step=step)
 
 
-def _fail_job(job_id: str, error: str):
+def _fail_job(job_id: str, error: str, client_name: str = ""):
     logger.error("[%s] Job failed: %s", job_id[:8], error)
     _update_job(job_id, status="error", error_message=error[:2000])
+    if settings.notify_webhook_url and settings.notify_phone and client_name:
+        notify_job_failed(
+            webhook_url=settings.notify_webhook_url,
+            phone=settings.notify_phone,
+            client_name=client_name,
+            job_id=job_id,
+            error=error,
+        )
 
 
 # ------------------------------------------------------------------
@@ -392,6 +401,24 @@ async def process_job(job: dict):
         processed_conversations=total_conversations,
     )
     logger.info("[%s] Job completed successfully", job_id[:8])
+
+    # WhatsApp notification
+    if settings.notify_webhook_url and settings.notify_phone:
+        knowledge_summary = None
+        if knowledge and not knowledge.error:
+            knowledge_summary = {
+                "confirmed_insurances": knowledge.confirmed_insurances,
+                "confirmed_address": knowledge.confirmed_address,
+                "confirmed_hours": knowledge.confirmed_hours,
+            }
+        notify_job_done(
+            webhook_url=settings.notify_webhook_url,
+            phone=settings.notify_phone,
+            client_name=client["name"],
+            job_id=job_id,
+            total_conversations=total_conversations,
+            knowledge_summary=knowledge_summary,
+        )
 
 
 # ------------------------------------------------------------------

@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     # Report output
     reports_output_dir: str = Field("./legacy-analyzer", env="REPORTS_OUTPUT_DIR")
 
+    # WhatsApp notification — enviada quando um job de análise é concluído ou falha
+    # NOTIFY_WEBHOOK_URL: URL do webhook n8n (ex: https://n8n.easyscale.co/webhook/la-notify)
+    # NOTIFY_PHONE: número no formato internacional sem + (ex: 5511999999999)
+    notify_webhook_url: Optional[str] = Field(None, env="NOTIFY_WEBHOOK_URL")
+    notify_phone: Optional[str] = Field(None, env="NOTIFY_PHONE")
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
