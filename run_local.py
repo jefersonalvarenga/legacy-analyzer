@@ -130,10 +130,37 @@ def parse_args():
         help="Limit number of conversations to process (0 = all). Useful for testing.",
     )
     parser.add_argument(
+        "--clinic-id",
+        default=None,
+        dest="clinic_id",
+        help="UUID da clínica em sf_clinics (easyscale-sofia). Quando fornecido, o Blueprint é salvo em la_blueprints com clinic_id para a Sofia consumir automaticamente.",
+    )
+    parser.add_argument(
         "--ticket-medio",
         type=float,
         default=None,
         help="Average ticket value in BRL (user input). If not provided, estimated by LLM.",
+    )
+    parser.add_argument(
+        "--provider",
+        default="groq",
+        choices=["groq", "openai", "glm"],
+        help=(
+            "LLM provider for per-conversation analysis (default: groq). "
+            "groq=free/fast, openai=paid/reliable, glm=free/requires valid key."
+        ),
+    )
+    parser.add_argument(
+        "--fast-model",
+        default=None,
+        dest="fast_model",
+        help="Model for per-conversation steps. Defaults: groq=llama-3.1-8b-instant, openai=gpt-4o-mini, glm=glm-4.7-flash",
+    )
+    parser.add_argument(
+        "--agg-model",
+        default=None,
+        dest="agg_model",
+        help="Model for aggregate steps (Shadow DNA). Defaults: groq=llama-3.3-70b-versatile, others=same as --fast-model",
     )
     return parser.parse_args()
 
@@ -160,10 +187,48 @@ async def main():
     # ------------------------------------------------------------------
     # 1. Configure LLM
     # ------------------------------------------------------------------
-    logger.info("Configuring DSPy with model: %s", settings.llm_model)
+    GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+    PROVIDER_DEFAULTS = {
+        "groq":  {"fast": "llama-3.1-8b-instant", "agg": "llama-3.3-70b-versatile"},
+        "openai": {"fast": "gpt-4o-mini",          "agg": "gpt-4o-mini"},
+        "glm":   {"fast": "glm-4.7-flash",         "agg": "glm-4.7-flash"},
+    }
+    provider = args.provider
+    defaults = PROVIDER_DEFAULTS[provider]
+    fast_model = args.fast_model or defaults["fast"]
+    agg_model  = args.agg_model  or defaults["agg"]
+
+    if provider == "groq":
+        fast_api_key = settings.groq_api_key
+        fast_base_url = GROQ_BASE_URL
+        agg_api_key = settings.groq_api_key
+        agg_base_url = GROQ_BASE_URL
+        if not fast_api_key:
+            print("ERROR: GROQ_API_KEY not set. Add it to .env or use --provider openai")
+            sys.exit(1)
+    elif provider == "glm":
+        fast_api_key = settings.openai_api_key   # GLM reuses OPENAI_API_KEY slot
+        fast_base_url = settings.openai_base_url
+        agg_api_key = fast_api_key
+        agg_base_url = fast_base_url
+        if not fast_base_url:
+            print("ERROR: OPENAI_BASE_URL not set (required for glm provider)")
+            sys.exit(1)
+    else:  # openai
+        fast_api_key = settings.openai_api_key
+        fast_base_url = None
+        agg_api_key = settings.openai_api_key
+        agg_base_url = None
+
+    logger.info("Provider: %s | fast=%s | agg=%s", provider, fast_model, agg_model)
     configure_lm(
-        openai_api_key=settings.openai_api_key,
-        model=settings.llm_model,
+        openai_api_key=fast_api_key,
+        model=fast_model,
+        base_url=fast_base_url,
+        anthropic_api_key=settings.anthropic_api_key,
+        agg_model=agg_model if agg_model != fast_model else None,
+        agg_api_key=agg_api_key if agg_model != fast_model else None,
+        agg_base_url=agg_base_url if agg_model != fast_model else None,
     )
 
     # ------------------------------------------------------------------
@@ -384,6 +449,7 @@ async def main():
                 conv_embeddings, agg, html_report,
                 str(oa_path), oa_stats.exported_records,
                 str(rag_path), rag_stats.exported_records,
+                blueprint=blueprint,
             )
             logger.info("Supabase persistence complete")
         except Exception as e:
@@ -402,6 +468,7 @@ async def _persist_to_supabase(
     args, conversations, metrics_list, analyses,
     conv_embeddings, agg, html_report,
     oa_path, oa_count, rag_path, rag_count,
+    blueprint: dict = None,
 ):
     import json
     from db import get_db
@@ -512,6 +579,22 @@ async def _persist_to_supabase(
             "avg_health_score": agg.avg_health_score,
         },
     }).execute()
+
+    # Blueprint → la_blueprints (consumed by Sofia via clinic_id)
+    if blueprint:
+        blueprint_row = {
+            "job_id": job_id,
+            "client_id": client_id,
+            "knowledge_base_mapping": blueprint.get("knowledge_base_mapping", {}),
+            "blueprint_json": blueprint,
+        }
+        if args.clinic_id:
+            blueprint_row["clinic_id"] = args.clinic_id
+        db.table("la_blueprints").insert(blueprint_row).execute()
+        logger.info(
+            "Blueprint saved to la_blueprints%s",
+            f" (clinic_id={args.clinic_id})" if args.clinic_id else " (no clinic_id — Sofia won't auto-load)",
+        )
 
     # Exports
     db.table("la_training_exports").insert([
