@@ -271,11 +271,6 @@ def init_knowledge_modules():
     _consolidator = KnowledgeConsolidatorModule()
 
 
-@contextlib.contextmanager
-def _null_ctx():
-    """No-op context manager (when no LM override needed)."""
-    yield
-
 
 def _ensure_modules_initialized():
     """Initialize DSPy modules if not yet done (for offline/test use)."""
@@ -688,27 +683,25 @@ def consolidate_knowledge_offline(
 
     # Fase 0 Python: filtrar mensagens relevantes por categoria
     # (equivalente ao SQL ILIKE, mas em memória)
+    # Apply CATEGORY_LIMIT per category independently (mirrors online SQL behavior)
     category_messages: dict[str, list[str]] = {cat: [] for cat in CATEGORY_PATTERNS}
 
     for conv in conversations:
         for msg in conv.clinic_messages:
             content = msg.content
             for category, patterns in CATEGORY_PATTERNS.items():
-                if any(p.lower() in content.lower() for p in patterns):
-                    category_messages[category].append(content)
+                if len(category_messages[category]) < CATEGORY_LIMIT:
+                    if any(p.lower() in content.lower() for p in patterns):
+                        category_messages[category].append(content)
 
-    # Deduplicate e limitar per category
-    all_filtered: list[str] = []
+    # Deduplicate across all categories
     seen: set[str] = set()
-    for cat, msgs in category_messages.items():
+    all_filtered: list[str] = []
+    for msgs in category_messages.values():
         for m in msgs:
             if m not in seen:
                 seen.add(m)
                 all_filtered.append(m)
-                if len(all_filtered) >= CATEGORY_LIMIT:
-                    break
-        if len(all_filtered) >= CATEGORY_LIMIT:
-            break
 
     if not all_filtered:
         logger.warning("[KC offline] Nenhuma mensagem relevante encontrada.")
@@ -732,7 +725,7 @@ def consolidate_knowledge_offline(
 
     def _process_batch(batch_msgs: list[str]) -> dict:
         text = "\n".join(f"[msg] {m}" for m in batch_msgs)
-        ctx = dspy.context(lm=fast_lm) if fast_lm else _null_ctx()
+        ctx = dspy.context(lm=fast_lm) if fast_lm else contextlib.nullcontext()
         try:
             with ctx:
                 out = _extractor(messages_text=text, clinic_name=clinic_name)
@@ -768,7 +761,7 @@ def consolidate_knowledge_offline(
 
     try:
         lm_for_consolidation = consolidation_lm or fast_lm
-        ctx = dspy.context(lm=lm_for_consolidation) if lm_for_consolidation else _null_ctx()
+        ctx = dspy.context(lm=lm_for_consolidation) if lm_for_consolidation else contextlib.nullcontext()
         with ctx:
             consolidated = _consolidator(
                 raw_extractions=raw_extractions,
