@@ -31,6 +31,7 @@ Usage:
     )
 """
 
+import contextlib
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -268,6 +269,21 @@ def init_knowledge_modules():
     global _extractor, _consolidator
     _extractor = FactExtractor()
     _consolidator = KnowledgeConsolidatorModule()
+
+
+@contextlib.contextmanager
+def _null_ctx():
+    """No-op context manager (when no LM override needed)."""
+    yield
+
+
+def _ensure_modules_initialized():
+    """Initialize DSPy modules if not yet done (for offline/test use)."""
+    global _extractor, _consolidator
+    if _extractor is None:
+        _extractor = FactExtractor()
+    if _consolidator is None:
+        _consolidator = KnowledgeConsolidatorModule()
 
 
 # ------------------------------------------------------------------
@@ -636,3 +652,142 @@ def save_knowledge_to_supabase(
         logger.error("[KC] Failed to save to la_blueprints: %s", e)
 
     return None
+
+
+# ------------------------------------------------------------------
+# Offline mode (no Supabase)
+# ------------------------------------------------------------------
+
+def consolidate_knowledge_offline(
+    conversations,
+    clinic_name: str,
+    fast_lm=None,
+    consolidation_lm=None,
+) -> ConsolidatedKnowledge:
+    """
+    Modo offline do KC: sem Supabase.
+
+    Recebe lista de Conversation objects diretamente (já em memória),
+    filtra por keywords Python (sem SQL), e roda as mesmas fases 1 e 2.
+
+    Útil para:
+    - Rodar com --no-supabase
+    - Testes unitários / integração
+    - Primeiros N conversas antes de persistir no DB
+
+    Args:
+        conversations: lista de Conversation objects do parser
+        clinic_name: nome da clínica (para o LLM)
+        fast_lm: LM para fase 1 (batch extraction). Usa dspy.settings.lm se None.
+        consolidation_lm: LM para fase 2 (consolidation). Usa fast_lm se None.
+    """
+    result = ConsolidatedKnowledge()
+
+    if not conversations:
+        return result
+
+    # Fase 0 Python: filtrar mensagens relevantes por categoria
+    # (equivalente ao SQL ILIKE, mas em memória)
+    category_messages: dict[str, list[str]] = {cat: [] for cat in CATEGORY_PATTERNS}
+
+    for conv in conversations:
+        for msg in conv.clinic_messages:
+            content = msg.content
+            for category, patterns in CATEGORY_PATTERNS.items():
+                if any(p.lower() in content.lower() for p in patterns):
+                    category_messages[category].append(content)
+
+    # Deduplicate e limitar per category
+    all_filtered: list[str] = []
+    seen: set[str] = set()
+    for cat, msgs in category_messages.items():
+        for m in msgs:
+            if m not in seen:
+                seen.add(m)
+                all_filtered.append(m)
+                if len(all_filtered) >= CATEGORY_LIMIT:
+                    break
+        if len(all_filtered) >= CATEGORY_LIMIT:
+            break
+
+    if not all_filtered:
+        logger.warning("[KC offline] Nenhuma mensagem relevante encontrada.")
+        return result
+
+    logger.info("[KC offline] %d mensagens filtradas para LLM.", len(all_filtered))
+
+    # Fase 1: batch extraction
+    batches = [
+        all_filtered[i: i + BATCH_SIZE]
+        for i in range(0, len(all_filtered), BATCH_SIZE)
+    ]
+
+    _ensure_modules_initialized()
+
+    all_insurances: list[str] = []
+    all_address_hints: list[str] = []
+    all_hours_hints: list[str] = []
+    all_payment_hints: list[str] = []
+    all_procedure_hints: list[str] = []
+
+    def _process_batch(batch_msgs: list[str]) -> dict:
+        text = "\n".join(f"[msg] {m}" for m in batch_msgs)
+        ctx = dspy.context(lm=fast_lm) if fast_lm else _null_ctx()
+        try:
+            with ctx:
+                out = _extractor(messages_text=text, clinic_name=clinic_name)
+            return {
+                "insurances": _safe_list(out.insurances, []),
+                "address": _safe_list(out.address_hints, []),
+                "hours": _safe_list(out.hours_hints, []),
+                "payment": _safe_list(out.payment_hints, []),
+                "procedures": _safe_list(out.procedure_hints, []),
+            }
+        except Exception as e:
+            logger.warning("[KC offline] Batch error: %s", e)
+            return {"insurances": [], "address": [], "hours": [], "payment": [], "procedures": []}
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {executor.submit(_process_batch, b): b for b in batches}
+        for future in as_completed(futures):
+            r = future.result()
+            all_insurances.extend(r["insurances"])
+            all_address_hints.extend(r["address"])
+            all_hours_hints.extend(r["hours"])
+            all_payment_hints.extend(r["payment"])
+            all_procedure_hints.extend(r["procedures"])
+
+    # Fase 2: consolidação
+    raw_extractions = json.dumps({
+        "insurances": list(dict.fromkeys(all_insurances)),
+        "address_hints": list(dict.fromkeys(all_address_hints)),
+        "hours_hints": list(dict.fromkeys(all_hours_hints)),
+        "payment_hints": list(dict.fromkeys(all_payment_hints)),
+        "procedure_hints": list(dict.fromkeys(all_procedure_hints)),
+    }, ensure_ascii=False)
+
+    try:
+        lm_for_consolidation = consolidation_lm or fast_lm
+        ctx = dspy.context(lm=lm_for_consolidation) if lm_for_consolidation else _null_ctx()
+        with ctx:
+            consolidated = _consolidator(
+                raw_extractions=raw_extractions,
+                clinic_name=clinic_name,
+            )
+        result.confirmed_insurances = _safe_list(consolidated.confirmed_insurances, [])
+        result.dropped_insurances   = _safe_list(consolidated.dropped_insurances, [])
+        result.confirmed_address    = str(consolidated.confirmed_address or "").strip()
+        result.confirmed_hours      = _safe_list(consolidated.confirmed_hours, [])
+        result.confirmed_payment    = _safe_list(consolidated.confirmed_payment, [])
+        result.confirmed_procedures = _safe_list(consolidated.confirmed_procedures, [])
+        result.notes                = str(consolidated.notes or "").strip()
+    except Exception as e:
+        result.error = f"Phase 2 (offline) failed: {e}"
+        logger.error("[KC offline] %s", result.error)
+        result.confirmed_insurances = list(dict.fromkeys(all_insurances))
+        result.confirmed_address    = all_address_hints[0] if all_address_hints else ""
+        result.confirmed_hours      = list(dict.fromkeys(all_hours_hints))
+        result.confirmed_payment    = list(dict.fromkeys(all_payment_hints))
+        result.confirmed_procedures = list(dict.fromkeys(all_procedure_hints))
+
+    return result

@@ -14,6 +14,40 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env.test", override=False)
 load_dotenv(Path(__file__).parent.parent / ".env", override=False)
 
+import dspy
+
+
+def _build_groq_lm() -> dspy.LM:
+    """Instancia LM Groq a partir de GROQ_API_KEY."""
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        pytest.skip("GROQ_API_KEY não definido — pulando teste LLM")
+    return dspy.LM(
+        model="groq/llama-3.1-8b-instant",
+        api_key=api_key,
+        temperature=0.0,
+        max_tokens=512,
+    )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def configure_dspy_lm():
+    """
+    Configura dspy.settings.lm globalmente para todos os testes que precisam de LLM.
+    Usa Groq (llama-3.1-8b-instant) por ser gratuito e rápido.
+    Pula silenciosamente se GROQ_API_KEY não estiver disponível.
+    """
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return  # testes que precisam de LLM vão falhar individualmente
+    lm = dspy.LM(
+        model="groq/llama-3.1-8b-instant",
+        api_key=api_key,
+        temperature=0.0,
+        max_tokens=512,
+    )
+    dspy.configure(lm=lm)
+
 
 SYNTHETIC_ARCHIVE = Path(__file__).parent / "fixtures" / "lumina_synthetic.zip"
 TEST_CLIENT_SLUG = "lumina_test"
