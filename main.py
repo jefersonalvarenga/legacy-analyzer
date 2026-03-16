@@ -239,6 +239,16 @@ async def create_job(
     }
 
 
+# Status normalization: DB enum values → API contract values (pending/running/complete/failed)
+STATUS_MAP: dict[str, str] = {
+    "queued": "pending",
+    "processing": "running",
+    "done": "complete",
+    "error": "failed",
+    "pending": "pending",  # used by POST /analyze/{clinic_id} jobs
+}
+
+
 @app.get("/jobs/{job_id}")
 def get_job(job_id: str):
     db = get_db()
@@ -251,7 +261,10 @@ def get_job(job_id: str):
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Job not found")
-    return result.data
+
+    job = dict(result.data)
+    job["normalized_status"] = STATUS_MAP.get(job.get("status", ""), job.get("status"))
+    return job
 
 
 @app.get("/jobs/{job_id}/report", response_class=HTMLResponse)
