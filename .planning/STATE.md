@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Evolution API Go Live
 status: completed
-stopped_at: Completed 06-01-PLAN.md — Evolution Ingestor
-last_updated: "2026-03-16T19:20:19.306Z"
+stopped_at: Completed 07-01-PLAN.md — FastAPI Endpoints
+last_updated: "2026-03-16T19:42:01.845Z"
 last_activity: 2026-03-16 — 06-01 Evolution Ingestor implemented
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
   percent: 11
 ---
 
@@ -50,6 +50,7 @@ Progress: [█░░░░░░░░░] 11%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 07-fastapi-endpoints P01 | 2 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,9 @@ Progress: [█░░░░░░░░░] 11%
 - source_filename = remoteJid string no Conversation (compatibilidade de tipo com parser.py)
 - days_back=90 como limite padrao para queries de Message — evita volume ilimitado
 - raw_line="" para todas as mensagens do Evolution — nao ha linha de texto bruto na API
+- [Phase 07-fastapi-endpoints]: POST /analyze/{clinic_id} retorna 202 imediatamente via FastAPI BackgroundTasks
+- [Phase 07-fastapi-endpoints]: STATUS_MAP normaliza enums do DB para contrato estavel de API (pending/running/complete/failed)
+- [Phase 07-fastapi-endpoints]: Status 'pending' reservado para jobs Evolution — worker continua polling 'queued' sem conflito
 
 ### Blockers/Concerns
 
@@ -78,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16
-Stopped at: Completed 06-01-PLAN.md — Evolution Ingestor
+Last session: 2026-03-16T19:42:01.843Z
+Stopped at: Completed 07-01-PLAN.md — FastAPI Endpoints
 Resume file: None

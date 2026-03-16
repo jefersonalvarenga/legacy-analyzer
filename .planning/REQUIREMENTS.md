@@ -13,9 +13,9 @@
 
 ### API
 
-- [ ] **API-01**: `POST /analyze/{clinic_id}` — valida clinic_id em sf_clinics, cria job, inicia analise em background, retorna job_id imediatamente
-- [ ] **API-02**: `GET /jobs/{job_id}` — retorna status (pending / running / complete / failed) e progresso
-- [ ] **API-03**: `main.py` atualizada para suportar novo fluxo sem quebrar comportamento existente
+- [x] **API-01**: `POST /analyze/{clinic_id}` — valida clinic_id em sf_clinics, cria job, inicia analise em background, retorna job_id imediatamente
+- [x] **API-02**: `GET /jobs/{job_id}` — retorna status (pending / running / complete / failed) e progresso
+- [x] **API-03**: `main.py` atualizada para suportar novo fluxo sem quebrar comportamento existente
 
 ### Resources
 
@@ -64,9 +64,9 @@
 | ING-01 | Phase 6 | Complete |
 | ING-02 | Phase 6 | Complete |
 | ING-03 | Phase 6 | Complete |
-| API-01 | Phase 7 | Pending |
-| API-02 | Phase 7 | Pending |
-| API-03 | Phase 7 | Pending |
+| API-01 | Phase 7 | Complete |
+| API-02 | Phase 7 | Complete |
+| API-03 | Phase 7 | Complete |
 | RES-01 | Phase 8 | Pending |
 | RES-02 | Phase 8 | Pending |
 | SVC-01 | Phase 8 | Pending |
