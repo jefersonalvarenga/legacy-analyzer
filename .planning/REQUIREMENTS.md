@@ -5,15 +5,15 @@
 
 ## v1.1 Requirements — Evolution API Go Live
 
-### Ingestão
+### Ingestao
 
-- [ ] **ING-01**: LA lê mensagens da tabela `Message` do Evolution WHERE instanceId = instância do onboarding
+- [ ] **ING-01**: LA le mensagens da tabela `Message` do Evolution WHERE instanceId = instancia do onboarding
 - [ ] **ING-02**: Adapter mapeia formato `Message` → objetos internos `Conversation`/`Message`
-- [ ] **ING-03**: Filtra conversas por clinic_id (via instância associada ao onboarding)
+- [ ] **ING-03**: Filtra conversas por clinic_id (via instancia associada ao onboarding)
 
 ### API
 
-- [ ] **API-01**: `POST /analyze/{clinic_id}` — valida clinic_id em sf_clinics, cria job, inicia análise em background, retorna job_id imediatamente
+- [ ] **API-01**: `POST /analyze/{clinic_id}` — valida clinic_id em sf_clinics, cria job, inicia analise em background, retorna job_id imediatamente
 - [ ] **API-02**: `GET /jobs/{job_id}` — retorna status (pending / running / complete / failed) e progresso
 - [ ] **API-03**: `main.py` atualizada para suportar novo fluxo sem quebrar comportamento existente
 
@@ -24,38 +24,38 @@
 
 ### Services
 
-- [ ] **SVC-01**: LA infere procedimentos e serviços oferecidos pela clínica (ex: implante, clareamento, ortodontia) → salva em `la_services`
-- [ ] **SVC-02**: `la_services` inclui frequência de menção (indica relevância do serviço para a clínica)
+- [ ] **SVC-01**: LA infere procedimentos e servicos oferecidos pela clinica (ex: implante, clareamento, ortodontia) → salva em `la_services`
+- [ ] **SVC-02**: `la_services` inclui frequencia de mencao (indica relevancia do servico para a clinica)
 
 ### Pipeline
 
-- [ ] **PIPE-01**: Pipeline completo (métricas, DSPy, desfechos, Shadow DNA, blueprint) funciona com mensagens do Evolution
+- [ ] **PIPE-01**: Pipeline completo (metricas, DSPy, desfechos, Shadow DNA, blueprint) funciona com mensagens do Evolution
 - [ ] **PIPE-02**: Blueprint salvo em `la_blueprints` com `clinic_id` correto para a Sofia consumir
 
 ## v2 Requirements
 
-### Multi-instância
+### Multi-instancia
 
-- **MULTI-01**: Consolidação de análises de N instâncias Evolution de uma mesma Unit
-- **MULTI-02**: `sf_instance_clinic_map` usada no fluxo de análise multi-instância
+- **MULTI-01**: Consolidacao de analises de N instancias Evolution de uma mesma Unit
+- **MULTI-02**: `sf_instance_clinic_map` usada no fluxo de analise multi-instancia
 
-### Monitoramento automático
+### Monitoramento automatico
 
-- **MON-01**: Worker monitora `sf_clinics` e dispara análise automaticamente (sem depender do frontend)
-- **MON-02**: Re-análise incremental — processa apenas mensagens novas desde a última análise
+- **MON-01**: Worker monitora `sf_clinics` e dispara analise automaticamente (sem depender do frontend)
+- **MON-02**: Re-analise incremental — processa apenas mensagens novas desde a ultima analise
 
 ### KC
 
-- **KC-01**: Knowledge Consolidator online reativado após validação com clínicas reais
+- **KC-01**: Knowledge Consolidator online reativado apos validacao com clinicas reais
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
 | KC (offline e online) | Suspenso integralmente — foco no go live |
-| Archive.zip como fallback | Só se performance do Evolution inviabilizar |
-| Relação blueprint → AgentProfile | A definir após go live |
-| Blueprint overwrite por unidade | v2+ junto com multi-instância |
+| Archive.zip como fallback | So se performance do Evolution inviabilizar |
+| Relacao blueprint → AgentProfile | A definir apos go live |
+| Blueprint overwrite por unidade | v2+ junto com multi-instancia |
 
 ## Traceability
 
@@ -81,4 +81,4 @@
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-16 after initial definition*
+*Last updated: 2026-03-16 — Traceability updated for v1.1 roadmap (Phases 6-9)*
