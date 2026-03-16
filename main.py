@@ -22,13 +22,14 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from config import get_settings
 from db import get_db
+from analyzer.analysis_runner import run_analysis
 
 logging.basicConfig(
     level=logging.INFO,
@@ -72,6 +73,13 @@ class ClientCreate(BaseModel):
     config: dict = {}
 
 
+class AnalyzeResponse(BaseModel):
+    job_id: str
+    clinic_id: str
+    status: str
+    message: str
+
+
 @app.get("/clients")
 def list_clients():
     db = get_db()
@@ -111,6 +119,56 @@ def get_client(slug: str):
 # ------------------------------------------------------------------
 # Jobs
 # ------------------------------------------------------------------
+
+@app.post("/analyze/{clinic_id}", status_code=202, response_model=AnalyzeResponse)
+async def analyze_clinic(clinic_id: str, background_tasks: BackgroundTasks):
+    """
+    Trigger analysis for a clinic using Evolution API messages.
+    Validates clinic_id in sf_clinics (fail-fast 404), creates job, fires
+    background processing, and returns job_id immediately.
+    """
+    db = get_db()
+
+    # Step 1: Fail-fast — validate clinic_id BEFORE creating any job
+    clinic_result = (
+        db.table("sf_clinics")
+        .select("id, name")
+        .eq("id", clinic_id)
+        .single()
+        .execute()
+    )
+    if not clinic_result.data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Clinic '{clinic_id}' not found in sf_clinics",
+        )
+
+    clinic = clinic_result.data
+
+    # Step 2: Create job record with status='pending' (worker does NOT poll pending)
+    job_result = db.table("la_analysis_jobs").insert({
+        "clinic_id": clinic_id,
+        "status": "pending",
+        "progress": 0,
+        "current_step": "Na fila de processamento",
+    }).execute()
+
+    if not job_result.data:
+        raise HTTPException(status_code=500, detail="Failed to create analysis job")
+
+    job_id = job_result.data[0]["id"]
+    logger.info("Analysis job %s created for clinic %s", job_id, clinic_id)
+
+    # Step 3: Schedule background processing — fires AFTER response is sent
+    background_tasks.add_task(run_analysis, job_id, clinic_id)
+
+    return AnalyzeResponse(
+        job_id=job_id,
+        clinic_id=clinic_id,
+        status="pending",
+        message="Analise iniciada. Acompanhe o progresso via GET /jobs/{job_id}.",
+    )
+
 
 @app.post("/jobs", status_code=201)
 async def create_job(
