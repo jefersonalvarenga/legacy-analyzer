@@ -279,3 +279,47 @@ ALTER TABLE la_analysis_jobs
 
 -- 4. Index for clinic lookups
 CREATE INDEX IF NOT EXISTS idx_la_jobs_clinic_id ON la_analysis_jobs(clinic_id);
+
+-- ============================================================
+-- MIGRATION: Phase 8 — Resources and Services Inference
+-- Run in Supabase SQL Editor after deploying Phase 8
+-- ============================================================
+
+-- 1. Inferred clinic professionals and schedule configuration
+CREATE TABLE IF NOT EXISTS la_resources (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clinic_id       UUID NOT NULL REFERENCES sf_clinics(id) ON DELETE CASCADE,
+    job_id          UUID REFERENCES la_analysis_jobs(id) ON DELETE SET NULL,
+    resource_type   TEXT NOT NULL DEFAULT 'professional',
+                    -- 'professional': named healthcare professional
+                    -- 'schedule_config': clinic-level schedule type record (when no professionals detected)
+    name            TEXT NOT NULL,          -- e.g. "Dra. Ana", "Dr. Carlos"
+    schedule_type   TEXT NOT NULL DEFAULT 'single',
+                    -- 'single' | 'by_professional' | 'by_room'
+    confirmed       BOOLEAN NOT NULL DEFAULT FALSE,
+                    -- FALSE = LA suggestion; TRUE = admin confirmed (set by Website/admin UI)
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_la_resources_clinic_id ON la_resources(clinic_id);
+CREATE INDEX IF NOT EXISTS idx_la_resources_job_id    ON la_resources(job_id);
+ALTER TABLE la_resources ENABLE ROW LEVEL SECURITY;
+
+-- 2. Inferred clinic services/procedures with mention frequency
+CREATE TABLE IF NOT EXISTS la_services (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    clinic_id       UUID NOT NULL REFERENCES sf_clinics(id) ON DELETE CASCADE,
+    job_id          UUID REFERENCES la_analysis_jobs(id) ON DELETE SET NULL,
+    name            TEXT NOT NULL,          -- e.g. "implante", "clareamento", "ortodontia"
+    mention_count   INT NOT NULL DEFAULT 0, -- frequency across clinic messages
+    confirmed       BOOLEAN NOT NULL DEFAULT FALSE,
+                    -- FALSE = LA suggestion; TRUE = admin confirmed
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_la_services_clinic_id     ON la_services(clinic_id);
+CREATE INDEX IF NOT EXISTS idx_la_services_job_id        ON la_services(job_id);
+CREATE INDEX IF NOT EXISTS idx_la_services_mention_count ON la_services(mention_count DESC);
+ALTER TABLE la_services ENABLE ROW LEVEL SECURITY;
