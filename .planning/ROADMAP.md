@@ -55,7 +55,9 @@ e KC suspenso integralmente.
   2. Cada Conversation contem objetos Message com sender, timestamp e body no mesmo formato que o parser do Archive.zip produziria — pipeline existente aceita sem modificacao
   3. Conversas de outras clinicas nao aparecem no resultado (filtragem por instanceId associado ao onboarding da clinica, nunca por outra clinica)
   4. O ingestor e read-only: nenhum INSERT, UPDATE ou DELETE e feito na tabela Message ou em qualquer outra tabela do Evolution
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 06-01-PLAN.md — Evolution Ingestor: test stubs (TDD RED) + full implementation (GREEN)
 
 ### Phase 7: FastAPI Endpoints
 **Goal**: Frontend pode disparar analise passando clinic_id e acompanhar o progresso via API REST, com validacao fail-fast se clinic_id nao existir
@@ -98,7 +100,7 @@ Note: Phase 8 depends on Phase 6 (not Phase 7). Phase 9 depends on both Phase 7 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1–5. Pipeline Local | v0 | - | Complete | 2026-03-13 |
-| 6. Evolution Ingestor | v1.1 | 0/TBD | Not started | - |
+| 6. Evolution Ingestor | v1.1 | 0/1 | Not started | - |
 | 7. FastAPI Endpoints | v1.1 | 0/TBD | Not started | - |
 | 8. Resources and Services Inference | v1.1 | 0/TBD | Not started | - |
 | 9. Pipeline Integration | v1.1 | 0/TBD | Not started | - |
