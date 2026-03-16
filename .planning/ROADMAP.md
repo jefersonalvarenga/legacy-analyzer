@@ -107,5 +107,5 @@ Note: Phase 8 depends on Phase 6 (not Phase 7). Phase 9 depends on both Phase 7 
 | 1–5. Pipeline Local | v0 | - | Complete | 2026-03-13 |
 | 6. Evolution Ingestor | 1/1 | Complete   | 2026-03-16 | - |
 | 7. FastAPI Endpoints | v1.1 | 0/1 | Not started | - |
-| 8. Resources and Services Inference | v1.1 | 0/2 | Not started | - |
+| 8. Resources and Services Inference | 1/2 | In Progress|  | - |
 | 9. Pipeline Integration | v1.1 | 0/TBD | Not started | - |

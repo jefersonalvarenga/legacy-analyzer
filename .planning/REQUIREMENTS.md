@@ -19,13 +19,13 @@
 
 ### Resources
 
-- [ ] **RES-01**: LA infere profissionais mencionados nas conversas (ex: "Dra. Ana", "Dr. Carlos") → salva em `la_resources`
-- [ ] **RES-02**: LA infere `schedule_type` (single / by_professional / by_room) → salva em `la_resources`
+- [x] **RES-01**: LA infere profissionais mencionados nas conversas (ex: "Dra. Ana", "Dr. Carlos") → salva em `la_resources`
+- [x] **RES-02**: LA infere `schedule_type` (single / by_professional / by_room) → salva em `la_resources`
 
 ### Services
 
-- [ ] **SVC-01**: LA infere procedimentos e servicos oferecidos pela clinica (ex: implante, clareamento, ortodontia) → salva em `la_services`
-- [ ] **SVC-02**: `la_services` inclui frequencia de mencao (indica relevancia do servico para a clinica)
+- [x] **SVC-01**: LA infere procedimentos e servicos oferecidos pela clinica (ex: implante, clareamento, ortodontia) → salva em `la_services`
+- [x] **SVC-02**: `la_services` inclui frequencia de mencao (indica relevancia do servico para a clinica)
 
 ### Pipeline
 
@@ -67,10 +67,10 @@
 | API-01 | Phase 7 | Complete |
 | API-02 | Phase 7 | Complete |
 | API-03 | Phase 7 | Complete |
-| RES-01 | Phase 8 | Pending |
-| RES-02 | Phase 8 | Pending |
-| SVC-01 | Phase 8 | Pending |
-| SVC-02 | Phase 8 | Pending |
+| RES-01 | Phase 8 | Complete |
+| RES-02 | Phase 8 | Complete |
+| SVC-01 | Phase 8 | Complete |
+| SVC-02 | Phase 8 | Complete |
 | PIPE-01 | Phase 9 | Pending |
 | PIPE-02 | Phase 9 | Pending |
 

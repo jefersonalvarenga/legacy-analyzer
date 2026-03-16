@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Evolution API Go Live
 status: completed
-stopped_at: Completed 07-01-PLAN.md — FastAPI Endpoints
-last_updated: "2026-03-16T19:45:09.230Z"
+stopped_at: Completed 08-01-PLAN.md — Resources and Services Inference (TDD RED)
+last_updated: "2026-03-16T20:52:36.629Z"
 last_activity: 2026-03-16 — 06-01 Evolution Ingestor implemented
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
   percent: 11
 ---
 
@@ -51,6 +51,7 @@ Progress: [█░░░░░░░░░] 11%
 
 *Updated after each plan completion*
 | Phase 07-fastapi-endpoints P01 | 2 | 3 tasks | 4 files |
+| Phase 08-resources-and-services-inference P01 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,9 @@ Progress: [█░░░░░░░░░] 11%
 - [Phase 07-fastapi-endpoints]: POST /analyze/{clinic_id} retorna 202 imediatamente via FastAPI BackgroundTasks
 - [Phase 07-fastapi-endpoints]: STATUS_MAP normaliza enums do DB para contrato estavel de API (pending/running/complete/failed)
 - [Phase 07-fastapi-endpoints]: Status 'pending' reservado para jobs Evolution — worker continua polling 'queued' sem conflito
+- [Phase 08-resources-and-services-inference]: la_resources/la_services use clinic_id FK to sf_clinics (not la_clients) — v1.1 Evolution flow tables
+- [Phase 08-resources-and-services-inference]: Delete only confirmed=FALSE rows before insert — admin-confirmed resources survive re-analysis
+- [Phase 08-resources-and-services-inference]: schedule_type denormalized on each la_resources row to mirror sf_resources schema
 
 ### Blockers/Concerns
 
@@ -82,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16T19:42:01.843Z
-Stopped at: Completed 07-01-PLAN.md — FastAPI Endpoints
+Last session: 2026-03-16T20:52:36.627Z
+Stopped at: Completed 08-01-PLAN.md — Resources and Services Inference (TDD RED)
 Resume file: None
