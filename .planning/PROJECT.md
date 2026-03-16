@@ -2,75 +2,76 @@
 
 ## What This Is
 
-Ferramenta de análise de conversas de WhatsApp de clínicas odontológicas, que extrai métricas de atendimento, detecta desfechos (agendamentos, ghosting, objeções), gera blueprints estruturados de conhecimento clínico, e exporta dados de treinamento para a IA Sofia. Processa arquivos de conversas exportados do WhatsApp ou, na nova arquitetura, lê mensagens diretamente do Evolution API.
+Ferramenta de análise de conversas de WhatsApp de clínicas, que lê mensagens diretamente do Supabase do Evolution API, infere os 5 eixos de comportamento clínico, extrai resources (profissionais, procedimentos), gera blueprint estruturado para a Sofia e expõe API HTTP para trigger pelo frontend no onboarding.
 
 ## Core Value
 
-Transformar conversas de WhatsApp em conhecimento estruturado (blueprint) que a Sofia usa para atender automaticamente pacientes com a mesma linguagem e processo da clínica.
+Transformar conversas de WhatsApp em conhecimento estruturado (blueprint + resources) que a Sofia usa para atender automaticamente pacientes com a mesma linguagem e processo da clínica.
 
 ## Requirements
 
 ### Validated
 
-<!-- Shipped and confirmed valuable. -->
-
-- ✓ Parser de Archive.zip com conversas WhatsApp no formato pt-BR — v0
-- ✓ Análise semântica com DSPy (sentimento, tópicos, qualidade, resumo) — v0
+- ✓ Parser de Archive.zip → Conversation objects — v0
+- ✓ Análise semântica DSPy (sentimento, tópicos, qualidade, resumo) — v0
 - ✓ Detecção de desfechos (agendado, ghosting, objeção, pendente) — v0
 - ✓ Shadow DNA extraction (tom, padrões linguísticos da clínica) — v0
-- ✓ Financial KPIs (ticket médio, oportunidade perdida, recuperável com IA) — v0
-- ✓ Blueprint JSON salvo em la_blueprints para Sofia consumir — v0
-- ✓ Persistência completa no Supabase (mensagens, análises, relatório HTML) — v0
-- ✓ Knowledge Consolidator offline mode (sem Supabase) — v0
+- ✓ Financial KPIs — v0
+- ✓ Blueprint JSON salvo em la_blueprints com clinic_id — v0
+- ✓ Persistência completa no Supabase — v0
 
 ### Active
 
-<!-- Current scope. Building toward these. -->
-
-- [ ] Conectar ao Evolution API para sincronizar conversas diretamente (sem upload de arquivo)
-- [ ] N8N chama webhook após sync → altera flag em tabela de controle
-- [ ] Frontend monitora flag via polling e inicia análise automaticamente
-- [ ] Pipeline de análise adaptado para ler mensagens do Evolution API em vez de Archive.zip
+- [ ] Ler mensagens da tabela `Message` do Evolution (Supabase) em vez de Archive.zip
+- [ ] Endpoint `POST /analyze/{clinic_id}` — trigger pelo frontend no onboarding
+- [ ] Endpoint `GET /jobs/{job_id}` — status e progresso da análise
+- [ ] Validar `clinic_id` em `sf_clinics` antes de iniciar análise
+- [ ] Pipeline completo funcionando com mensagens do Evolution → blueprint salvo
+- [ ] Inferir e salvar resources em `la_resources` (profissionais, procedimentos detectados nas conversas)
 
 ### Out of Scope
 
-- Upload manual de Archive.zip — substituído pela integração Evolution API neste milestone
-- Modo offline sem Supabase para o fluxo principal — relevante apenas para testes
+- KC (Knowledge Consolidator) — suspenso integralmente, foco no go live online
+- Consolidação multi-instância por Unit — v2+
+- Archive.zip como fallback — só se performance do Evolution inviabilizar
+- Relação blueprint → AgentProfile — a definir após go live
 
 ## Context
 
-- **Stack atual:** Python 3.11, FastAPI, DSPy, Supabase (PostgreSQL + pgvector), OpenAI/Groq/GLM
-- **Evolution API:** Plataforma de automação de WhatsApp Business. Expõe REST API para listar/ler conversas e mensagens.
-- **N8N:** Orquestrador de workflows que recebe webhook do Evolution e atualiza flag no Supabase
-- **Sofia:** IA de atendimento da EasyScale que consome `la_blueprints` via polling em `sf_clinics`
-- **Cliente atual em produção:** Sorriso Da Gente (slug: `sgen`)
-- **Archive de chats:** `/Users/jefersonalvarenga/Documents/customer-chats/sgen/chats/Archive.zip`
+- **Evolution API:** persiste mensagens na tabela `Message` no Supabase (mesmo banco da Sofia)
+- **N8N:** recebe webhook MESSAGES_SET do Evolution → `UPDATE sf_clinics SET onboarding_status='sync_complete', onboarding_step=3 WHERE evolution_instance_id=instance`
+- **Frontend:** faz subscribe em `sf_clinics`, detecta `sync_complete` → chama `POST /analyze/{clinic_id}`
+- **Sofia:** consome `la_blueprints` via polling `WHERE clinic_id = UUID ORDER BY created_at DESC LIMIT 1`
+- **sf_resources:** tabela operacional da Sofia — o LA sugere via `la_resources`, admin confirma, Website cria em `sf_resources`
+- **v1.0 (fechado):** planejado mas não executado — substituído por este milestone com escopo mais preciso
 
 ## Constraints
 
-- **Tech stack:** Python + Supabase — não adicionar novos bancos ou linguagens
-- **Evolution API:** Integração via REST (não SDK oficial), autenticação por API key
-- **Compatibilidade:** Manter `run_local.py` funcional com Archive.zip para clínicas sem Evolution API
-- **Sofia contrato:** `la_blueprints` com `blueprint_json` + `knowledge_base_mapping` + `clinic_id` — não quebrar
+- **Stack:** Python + Supabase — sem novos bancos ou linguagens
+- **Contrato Sofia:** `la_blueprints` com `blueprint_json` + `clinic_id` — não quebrar
+- **KC suspenso:** não evoluir `consolidate_knowledge_offline()` até retomada explícita
+- **Deploy:** EasyPanel VPS
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| KC offline first para testes | Permite validar extração sem depender de Supabase em CI | ✓ Good |
-| Blueprint salvo em la_blueprints com clinic_id | Sofia faz polling por clinic_id para carregar conhecimento | ✓ Good |
-| DSPy para análise semântica | Estrutura declarativa, fácil de testar e swappar modelos | ✓ Good |
-| Groq como provider padrão (free tier) | Velocidade + custo zero para desenvolvimento | ✓ Good |
+| Frontend chama com clinic_id (não instance_name) | Frontend conhece clinic_id pelo contexto de autenticação | ✓ Good |
+| sf_instance_clinic_map para multi-instância v2+ | v1.0 foca em 1 instância por clínica no onboarding | — Pending |
+| la_resources como sugestão do LA | LA infere, admin confirma, Website cria em sf_resources | — Pending |
+| KC suspenso integralmente | Acelerar go live online | — Pending |
+| Deploy EasyPanel VPS | Mesmo ambiente do N8N | — Pending |
+| Blueprint por organização com overwrite por unidade | Suporte a multi-unit no futuro | — Pending |
 
-## Current Milestone: v1.0 — Evolution API Integration
+## Current Milestone: v1.1 — Evolution API Go Live
 
-**Goal:** Substituir o upload manual de Archive.zip por sincronização automática via Evolution API, com N8N orquestrando o trigger e frontend monitorando via polling.
+**Goal:** Integrar o LA com o Evolution API (leitura via Supabase), expor API HTTP para trigger do frontend, inferir resources detectados nas conversas, e entregar blueprint completo para a Sofia no onboarding.
 
 **Target features:**
-- Sincronização de conversas via Evolution API
-- Flag de controle no Supabase atualizada pelo N8N
-- Frontend polling para detectar mensagens disponíveis e iniciar análise
-- Pipeline adaptado para processar mensagens do Evolution diretamente
+- Evolution Ingestor: ler `Message` WHERE instanceId = instance do onboarding
+- API: `POST /analyze/{clinic_id}` + `GET /jobs/{job_id}`
+- la_resources: inferir profissionais e procedimentos das conversas
+- Pipeline end-to-end: Evolution → blueprint → la_blueprints
 
 ---
-*Last updated: 2026-03-13 — Milestone v1.0 started*
+*Last updated: 2026-03-16 — Milestone v1.1 started (v1.0 fechado sem execução)*

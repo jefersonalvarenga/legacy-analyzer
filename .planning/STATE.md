@@ -2,60 +2,31 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-13)
+See: .planning/PROJECT.md (updated 2026-03-16)
 
-**Core value:** Transformar conversas de WhatsApp em conhecimento estruturado que a Sofia usa para atender pacientes automaticamente.
-**Current focus:** Milestone v1.0 — Evolution API Integration (Phase 6: Evolution Ingestor)
+**Core value:** Transformar conversas de WhatsApp em conhecimento estruturado (blueprint + resources) que a Sofia usa para atender pacientes automaticamente.
+**Current focus:** Milestone v1.1 — Evolution API Go Live
 
 ## Current Position
 
-Phase: 6 of 8 (Evolution Ingestor)
-Plan: 0 of 2 in current phase
-Status: Ready to plan
-Last activity: 2026-03-13 — Roadmap v1.0 criado, fases 6-8 definidas
-
-Progress: [░░░░░░░░░░] 0%
-
-## Performance Metrics
-
-**Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: -
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
-
-**Recent Trend:**
-- Last 5 plans: -
-- Trend: -
-
-*Updated after each plan completion*
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-16 — Milestone v1.1 iniciado (v1.0 fechado sem execução)
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [v0]: Evolution ingestor deve produzir list[Conversation] identico ao parser.py — downstream pipeline nao muda
-- [v0]: clinic_id validado em sf_clinics antes de iniciar qualquer analise (CTR-02 — fail fast no endpoint)
-- [v0]: CTR-01 e responsabilidade do frontend, documentada em docs/ pelo Legacy Analyzer
-
-### Pending Todos
-
-None yet.
+- Frontend chama `POST /analyze/{clinic_id}` — não instance_name
+- LA valida clinic_id em sf_clinics (fail fast)
+- LA lê tabela `Message` do Evolution (Supabase compartilhado) — read-only
+- la_resources: LA sugere, admin confirma, Website cria em sf_resources
+- KC suspenso integralmente — não evoluir
+- Deploy: EasyPanel VPS
+- v1.1 analisa 1 instância por clínica; multi-instância é v2+
 
 ### Blockers/Concerns
 
-- Precisa confirmar quais tabelas do Evolution estao no Supabase compartilhado e seus schemas exatos (bloqueante para Phase 6)
-
-## Session Continuity
-
-Last session: 2026-03-13
-Stopped at: Roadmap criado — proxima acao e plan-phase 6
-Resume file: None
+- Schema exato da tabela `Message` do Evolution no Supabase (colunas, instanceId format) — necessário antes de Phase 6
+- Relação blueprint → AgentProfile não definida — fora do escopo v1.1, resolver após go live
