@@ -39,7 +39,7 @@ e KC suspenso integralmente.
 
 **Milestone Goal:** Integrar o LA com o Evolution API (leitura via Supabase), expor API HTTP para trigger do frontend, inferir resources e services detectados nas conversas, e entregar blueprint completo para a Sofia no onboarding.
 
-- [ ] **Phase 6: Evolution Ingestor** - Adapter que le conversas da tabela Message do Evolution no Supabase e produz objetos Conversation/Message identicos ao parser existente
+- [x] **Phase 6: Evolution Ingestor** - Adapter que le conversas da tabela Message do Evolution no Supabase e produz objetos Conversation/Message identicos ao parser existente (completed 2026-03-16)
 - [ ] **Phase 7: FastAPI Endpoints** - Endpoints POST /analyze/{clinic_id} e GET /jobs/{job_id} com validacao de clinic_id em sf_clinics e execucao em background
 - [ ] **Phase 8: Resources and Services Inference** - Inferencia de profissionais (la_resources) e procedimentos/servicos (la_services) a partir das conversas, com schedule_type e frequencia de mencao
 - [ ] **Phase 9: Pipeline Integration** - Pipeline completo end-to-end (Evolution → metricas, DSPy, Shadow DNA, blueprint) funcionando com clinic_id correto e blueprint acessivel pela Sofia
@@ -100,7 +100,7 @@ Note: Phase 8 depends on Phase 6 (not Phase 7). Phase 9 depends on both Phase 7 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1–5. Pipeline Local | v0 | - | Complete | 2026-03-13 |
-| 6. Evolution Ingestor | v1.1 | 0/1 | Not started | - |
+| 6. Evolution Ingestor | 1/1 | Complete   | 2026-03-16 | - |
 | 7. FastAPI Endpoints | v1.1 | 0/TBD | Not started | - |
 | 8. Resources and Services Inference | v1.1 | 0/TBD | Not started | - |
 | 9. Pipeline Integration | v1.1 | 0/TBD | Not started | - |

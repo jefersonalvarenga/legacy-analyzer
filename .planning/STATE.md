@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-03-16)
 ## Current Position
 
 Phase: 6 of 9 (Evolution Ingestor)
-Plan: — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-03-16 — Roadmap v1.1 criado (Phases 6-9)
+Plan: 1 of 1 — COMPLETE
+Status: Phase 6 complete — ready for Phase 7 (API Endpoint)
+Last activity: 2026-03-16 — 06-01 Evolution Ingestor implemented
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 11%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0 (v1.1)
-- Average duration: —
-- Total execution time: —
+- Total plans completed: 1 (v1.1)
+- Average duration: 18 min
+- Total execution time: 18 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 06 | 1 | 18 min | 18 min |
 
 **Recent Trend:**
-- Last 5 plans: —
+- Last 5 plans: 06-01 (18 min)
 - Trend: —
 
 *Updated after each plan completion*
@@ -47,10 +47,13 @@ Progress: [░░░░░░░░░░] 0%
 - KC suspenso integralmente — nao evoluir consolidate_knowledge_offline()
 - Deploy: EasyPanel VPS
 - v1.1 analisa 1 instancia por clinica; multi-instancia e v2+
+- fromMe flag e o unico classificador para sender_type (clinic vs patient) — pushName nunca usado para classificar
+- source_filename = remoteJid string no Conversation (compatibilidade de tipo com parser.py)
+- days_back=90 como limite padrao para queries de Message — evita volume ilimitado
+- raw_line="" para todas as mensagens do Evolution — nao ha linha de texto bruto na API
 
 ### Blockers/Concerns
 
-- [Phase 6]: Schema exato da tabela Message do Evolution no Supabase (colunas, instanceId format) — necessario confirmar antes de implementar o ingestor
 - [Phase 9]: Relacao blueprint → AgentProfile nao definida — fora do escopo v1.1, resolver apos go live
 
 ### Pending Todos
@@ -60,5 +63,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Roadmap v1.1 criado — pronto para plan-phase 6
+Stopped at: Completed 06-01-PLAN.md — Evolution Ingestor
 Resume file: None

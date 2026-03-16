@@ -7,9 +7,9 @@
 
 ### Ingestao
 
-- [ ] **ING-01**: LA le mensagens da tabela `Message` do Evolution WHERE instanceId = instancia do onboarding
-- [ ] **ING-02**: Adapter mapeia formato `Message` → objetos internos `Conversation`/`Message`
-- [ ] **ING-03**: Filtra conversas por clinic_id (via instancia associada ao onboarding)
+- [x] **ING-01**: LA le mensagens da tabela `Message` do Evolution WHERE instanceId = instancia do onboarding
+- [x] **ING-02**: Adapter mapeia formato `Message` → objetos internos `Conversation`/`Message`
+- [x] **ING-03**: Filtra conversas por clinic_id (via instancia associada ao onboarding)
 
 ### API
 
@@ -61,9 +61,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ING-01 | Phase 6 | Pending |
-| ING-02 | Phase 6 | Pending |
-| ING-03 | Phase 6 | Pending |
+| ING-01 | Phase 6 | Complete |
+| ING-02 | Phase 6 | Complete |
+| ING-03 | Phase 6 | Complete |
 | API-01 | Phase 7 | Pending |
 | API-02 | Phase 7 | Pending |
 | API-03 | Phase 7 | Pending |
