@@ -258,3 +258,24 @@ VALUES (
     '{"whatsapp_export_language": "pt-BR"}'
 )
 ON CONFLICT (slug) DO NOTHING;
+
+-- ============================================================
+-- MIGRATION: Phase 7 — FastAPI Endpoints
+-- Run in Supabase SQL Editor after deploying Phase 7
+-- ============================================================
+
+-- 1. Add 'pending' to la_job_status enum (used by POST /analyze/{clinic_id})
+--    'pending' is the initial status for Evolution-triggered jobs only.
+--    Worker polls for 'queued' only — no conflict.
+ALTER TYPE la_job_status ADD VALUE IF NOT EXISTS 'pending';
+
+-- 2. Make client_id nullable (Evolution jobs have no la_clients record)
+ALTER TABLE la_analysis_jobs
+    ALTER COLUMN client_id DROP NOT NULL;
+
+-- 3. Add clinic_id FK to sf_clinics (nullable — backward compat with POST /jobs)
+ALTER TABLE la_analysis_jobs
+    ADD COLUMN IF NOT EXISTS clinic_id UUID REFERENCES sf_clinics(id) ON DELETE SET NULL;
+
+-- 4. Index for clinic lookups
+CREATE INDEX IF NOT EXISTS idx_la_jobs_clinic_id ON la_analysis_jobs(clinic_id);
