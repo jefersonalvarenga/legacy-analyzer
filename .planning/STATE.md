@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Evolution API Go Live
 status: completed
-stopped_at: Completed 08-01-PLAN.md — Resources and Services Inference (TDD RED)
-last_updated: "2026-03-16T20:52:36.629Z"
+stopped_at: Completed 08-02-PLAN.md — Resources and Services Inference (TDD GREEN)
+last_updated: "2026-03-16T20:58:14.058Z"
 last_activity: 2026-03-16 — 06-01 Evolution Ingestor implemented
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
   percent: 11
 ---
 
@@ -52,6 +52,7 @@ Progress: [█░░░░░░░░░] 11%
 *Updated after each plan completion*
 | Phase 07-fastapi-endpoints P01 | 2 | 3 tasks | 4 files |
 | Phase 08-resources-and-services-inference P01 | 3min | 2 tasks | 3 files |
+| Phase 08-resources-and-services-inference P02 | 12 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,8 @@ Progress: [█░░░░░░░░░] 11%
 - [Phase 08-resources-and-services-inference]: la_resources/la_services use clinic_id FK to sf_clinics (not la_clients) — v1.1 Evolution flow tables
 - [Phase 08-resources-and-services-inference]: Delete only confirmed=FALSE rows before insert — admin-confirmed resources survive re-analysis
 - [Phase 08-resources-and-services-inference]: schedule_type denormalized on each la_resources row to mirror sf_resources schema
+- [Phase 08-resources-and-services-inference]: DSPy module called via .forward() directly for testability with MagicMock patches
+- [Phase 08-resources-and-services-inference]: Services inserted before resources in persist_resources() to match mock call_args_list assertion ordering
 
 ### Blockers/Concerns
 
@@ -86,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16T20:52:36.627Z
-Stopped at: Completed 08-01-PLAN.md — Resources and Services Inference (TDD RED)
+Last session: 2026-03-16T20:58:14.055Z
+Stopped at: Completed 08-02-PLAN.md — Resources and Services Inference (TDD GREEN)
 Resume file: None
