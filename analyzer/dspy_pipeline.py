@@ -233,6 +233,12 @@ _sentiment_module: Optional[SentimentAnalyzer] = None
 _topic_module: Optional[TopicExtractor] = None
 _quality_module: Optional[QualityScorer] = None
 _summary_module: Optional[ConversationSummarizer] = None
+_aggregate_lm: Optional[dspy.LM] = None   # higher-quality LM for Shadow DNA
+
+
+def get_aggregate_lm() -> Optional[dspy.LM]:
+    """Return the aggregate LM if configured (used by Shadow DNA, outcome aggregation)."""
+    return _aggregate_lm
 
 
 def build_lm(
@@ -278,18 +284,30 @@ def configure_lm(
     base_url: Optional[str] = None,
     anthropic_api_key: Optional[str] = None,
     consolidator_model: str = "anthropic/claude-sonnet-4-6",
+    agg_model: Optional[str] = None,
+    agg_api_key: Optional[str] = None,
+    agg_base_url: Optional[str] = None,
 ):
     """
     Call once at startup to configure DSPy's language model.
     Also initializes all other DSPy modules (outcome, shadow DNA, financial,
     knowledge consolidator).
 
+    agg_model / agg_api_key / agg_base_url: optional higher-quality model for
+    aggregate steps (Shadow DNA). Falls back to fast_lm if not provided.
+
     Returns (fast_lm, consolidation_lm) for use in KnowledgeConsolidator.
     """
-    global _sentiment_module, _topic_module, _quality_module, _summary_module
+    global _sentiment_module, _topic_module, _quality_module, _summary_module, _aggregate_lm
 
     fast_lm = build_lm(model, openai_api_key, base_url=base_url)
     dspy.configure(lm=fast_lm)
+
+    if agg_model and agg_api_key:
+        _aggregate_lm = build_lm(agg_model, agg_api_key, base_url=agg_base_url)
+        logger.info("Aggregate LM (Shadow DNA): %s", agg_model)
+    else:
+        _aggregate_lm = None
 
     _sentiment_module = SentimentAnalyzer()
     _topic_module = TopicExtractor()
@@ -306,6 +324,8 @@ def configure_lm(
     init_shadow_module()
     init_financial_module()
     init_knowledge_modules()
+    from analyzer.resources_inference import init_resources_module
+    init_resources_module()
 
     logger.info("DSPy configured with model: %s", model)
 
@@ -363,7 +383,12 @@ def analyze_conversation(messages, clinic_name: str) -> SemanticAnalysis:
     # 2. Topics
     try:
         topics = _topic_module(conversation=conv_text, clinic_name=clinic_name)
-        result.topics = _safe_list(topics.topics, [])
+        raw_topics = _safe_list(topics.topics, [])
+        result.topics = [
+            t.get("topic") or t.get("name") or next(iter(t.values()), "")
+            if isinstance(t, dict) else str(t)
+            for t in raw_topics
+        ]
         result.primary_topic = str(topics.primary_topic).strip()
     except Exception as e:
         logger.warning("Topic extraction failed: %s", e)

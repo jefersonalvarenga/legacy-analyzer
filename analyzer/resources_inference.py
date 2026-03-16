@@ -221,7 +221,21 @@ def persist_resources(
     db.table("la_resources").delete().eq("clinic_id", clinic_id).eq("confirmed", False).execute()
     db.table("la_services").delete().eq("clinic_id", clinic_id).eq("confirmed", False).execute()
 
-    # Step 2: Build professional rows; if none detected, create a schedule_config row
+    # Step 2: Insert service rows first (if any)
+    if services:
+        svc_rows = [
+            {
+                "clinic_id": clinic_id,
+                "job_id": job_id,
+                "name": svc["name"],
+                "mention_count": svc["mention_count"],
+                "confirmed": False,
+            }
+            for svc in services
+        ]
+        db.table("la_services").insert(svc_rows).execute()
+
+    # Step 3: Build professional rows; if none detected, create a schedule_config row
     if professionals:
         rows = [
             {
@@ -246,22 +260,8 @@ def persist_resources(
             }
         ]
 
-    # Step 3: Insert resource rows
+    # Step 4: Insert resource rows
     db.table("la_resources").insert(rows).execute()
-
-    # Step 4: Insert service rows (if any)
-    if services:
-        svc_rows = [
-            {
-                "clinic_id": clinic_id,
-                "job_id": job_id,
-                "name": svc["name"],
-                "mention_count": svc["mention_count"],
-                "confirmed": False,
-            }
-            for svc in services
-        ]
-        db.table("la_services").insert(svc_rows).execute()
 
 
 def infer_and_persist_resources(
