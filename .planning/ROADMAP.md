@@ -57,7 +57,7 @@ e KC suspenso integralmente.
   4. O ingestor e read-only: nenhum INSERT, UPDATE ou DELETE e feito na tabela Message ou em qualquer outra tabela do Evolution
 **Plans**: 1 plan
 Plans:
-- [ ] 06-01-PLAN.md — Evolution Ingestor: test stubs (TDD RED) + full implementation (GREEN)
+- [x] 06-01-PLAN.md — Evolution Ingestor: test stubs (TDD RED) + full implementation (GREEN)
 
 ### Phase 7: FastAPI Endpoints
 **Goal**: Frontend pode disparar analise passando clinic_id e acompanhar o progresso via API REST, com validacao fail-fast se clinic_id nao existir
@@ -68,7 +68,9 @@ Plans:
   2. GET /jobs/{job_id} retorna status atual (pending / running / complete / failed) e percentual de progresso consultavel a qualquer momento
   3. POST /analyze/{clinic_id} com clinic_id inexistente em sf_clinics retorna HTTP 404 antes de iniciar qualquer analise ou criar qualquer job
   4. main.py suporta o novo fluxo sem quebrar endpoints ou comportamentos pre-existentes
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 07-01-PLAN.md — FastAPI Endpoints: test stubs (TDD RED) + POST /analyze + GET /jobs enrichment (GREEN)
 
 ### Phase 8: Resources and Services Inference
 **Goal**: LA infere automaticamente os profissionais, schedule_type e procedimentos/servicos da clinica a partir das conversas e persiste como sugestoes em la_resources e la_services
@@ -101,6 +103,6 @@ Note: Phase 8 depends on Phase 6 (not Phase 7). Phase 9 depends on both Phase 7 
 |-------|-----------|----------------|--------|-----------|
 | 1–5. Pipeline Local | v0 | - | Complete | 2026-03-13 |
 | 6. Evolution Ingestor | 1/1 | Complete   | 2026-03-16 | - |
-| 7. FastAPI Endpoints | v1.1 | 0/TBD | Not started | - |
+| 7. FastAPI Endpoints | v1.1 | 0/1 | Not started | - |
 | 8. Resources and Services Inference | v1.1 | 0/TBD | Not started | - |
 | 9. Pipeline Integration | v1.1 | 0/TBD | Not started | - |
