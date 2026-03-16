@@ -63,20 +63,39 @@ def _make_db_mock(
     """
     Builds a db mock that returns given rows for sf_clinics, Instance,
     and Message queries.
+
+    The returned db mock has a ``_message_table_mock`` attribute that holds
+    the stable MagicMock instance used for Message table calls — use this
+    for post-execution call inspection.
     """
     db = MagicMock()
 
+    # Pre-create stable table mocks so callers can inspect them after execution
+    clinic_table = MagicMock()
+    clinic_table.select.return_value.eq.return_value.single.return_value.execute.return_value.data = clinic_row
+
+    instance_table = MagicMock()
+    instance_table.select.return_value.eq.return_value.single.return_value.execute.return_value.data = instance_row
+
+    message_table = MagicMock()
+    message_table.select.return_value.eq.return_value.gte.return_value.order.return_value.execute.return_value.data = message_rows
+
     def table_side_effect(table_name: str) -> MagicMock:
-        mock_table = MagicMock()
         if table_name == "sf_clinics":
-            mock_table.select.return_value.eq.return_value.single.return_value.execute.return_value.data = clinic_row
+            return clinic_table
         elif table_name == "Instance":
-            mock_table.select.return_value.eq.return_value.single.return_value.execute.return_value.data = instance_row
+            return instance_table
         elif table_name == "Message":
-            mock_table.select.return_value.eq.return_value.gte.return_value.order.return_value.execute.return_value.data = message_rows
-        return mock_table
+            return message_table
+        return MagicMock()
 
     db.table.side_effect = table_side_effect
+
+    # Expose stable mocks for post-execution inspection
+    db._message_table_mock = message_table
+    db._clinic_table_mock = clinic_table
+    db._instance_table_mock = instance_table
+
     return db
 
 
@@ -99,37 +118,26 @@ class TestQueriesByInstanceId:
 
     def test_queries_by_instance_id(self):
         """Message query must use the resolved instanceId UUID, not the clinic_id."""
-        db_mock = _default_db_mock()
+        db_mock = _make_db_mock(
+            clinic_row={"evolution_instance_id": INSTANCE_NAME},
+            instance_row={"id": INSTANCE_UUID},
+            message_rows=[_make_message_row()],
+        )
 
         with patch("analyzer.evolution_ingestor.get_db", return_value=db_mock):
             ingest_from_evolution(CLINIC_ID, CLINIC_SENDER)
 
-        # The Message table must have been queried
+        # The Message table must have been queried at least once
         message_table_calls = [
             call for call in db_mock.table.call_args_list
             if call.args[0] == "Message"
         ]
         assert len(message_table_calls) >= 1, "Expected at least one call to db.table('Message')"
 
-        # The eq() filter must be called with the resolved instance UUID
-        message_table_mock = db_mock.table("Message")
-        db_mock.table.reset_mock()
-
-        # Verify via call args on the actual mock chain
-        # Re-run to capture the instanceId eq call cleanly
-        db_mock2 = _make_db_mock(
-            clinic_row={"evolution_instance_id": INSTANCE_NAME},
-            instance_row={"id": INSTANCE_UUID},
-            message_rows=[_make_message_row()],
-        )
-        with patch("analyzer.evolution_ingestor.get_db", return_value=db_mock2):
-            ingest_from_evolution(CLINIC_ID, CLINIC_SENDER)
-
-        # Confirm the Message table mock's .eq() was called with instanceId + UUID
-        msg_table = db_mock2.table("Message")
-        # The select chain: .select(...).eq("instanceId", INSTANCE_UUID)
+        # Use the stable mock instance to inspect the eq() call
+        msg_table = db_mock._message_table_mock
         eq_call_args = msg_table.select.return_value.eq.call_args
-        assert eq_call_args is not None
+        assert eq_call_args is not None, "Expected .eq() to be called on Message table"
         assert eq_call_args.args[0] == "instanceId"
         assert eq_call_args.args[1] == INSTANCE_UUID
 
@@ -254,8 +262,10 @@ class TestIsolationByInstanceId:
         assert len(convs) == 1
 
         # Confirm Message query eq used the correct instance UUID
-        msg_table = db_mock.table("Message")
+        # Use the stable mock instance to inspect the call
+        msg_table = db_mock._message_table_mock
         eq_call_args = msg_table.select.return_value.eq.call_args
+        assert eq_call_args is not None, "Expected .eq() to be called on Message table"
         assert eq_call_args.args[0] == "instanceId"
         assert eq_call_args.args[1] == INSTANCE_UUID
 
