@@ -22,6 +22,8 @@ import dspy
 
 logger = logging.getLogger(__name__)
 
+VALID_SCHEDULE_TYPES = {"single", "by_professional", "by_room"}
+
 
 @dataclass
 class ResourcesResult:
@@ -47,17 +49,17 @@ class ResourcesSignature(dspy.Signature):
     professionals: list = dspy.OutputField(
         desc=(
             "Lista de nomes de profissionais detectados nas conversas. "
-            "Inclua titulo quando presente (ex: ['Dra. Ana', 'Dr. Carlos', 'Dr. Marcos']). "
-            "Retorne lista vazia [] se nenhum profissional for identificado explicitamente. "
+            "Inclua titulo quando presente (ex: ['Dra. Ana', 'Dr. Carlos']). "
+            "Retorne lista vazia [] se nenhum profissional for identificado. "
             "NAO invente nomes — inclua apenas os que aparecem no texto."
         )
     )
     schedule_type: str = dspy.OutputField(
         desc=(
             "Tipo de agendamento: "
-            "'by_professional' se a clinica agenda por profissional especifico (ex: 'com a Dra. Ana'); "
+            "'by_professional' se a clinica agenda por profissional especifico; "
             "'by_room' se agenda por sala ou consultorio; "
-            "'single' se ha apenas um profissional ou se o agendamento nao menciona profissionais. "
+            "'single' se ha apenas um profissional ou agendamento nao menciona profissionais. "
             "Retorne exatamente um dos tres valores: single, by_professional, by_room."
         )
     )
@@ -79,7 +81,48 @@ _resources_module: Optional[ResourcesModule] = None
 
 def init_resources_module() -> None:
     """Initialize the DSPy ResourcesModule. Call alongside other init_*() in configure_lm()."""
-    raise NotImplementedError
+    global _resources_module
+    _resources_module = ResourcesModule()
+
+
+def _safe_professional_name(item) -> str:
+    """Extract a string name from a DSPy output item (str or dict)."""
+    if isinstance(item, str):
+        return item.strip()
+    if isinstance(item, dict):
+        # Handle common shapes: {"name": "..."}, {"professional": "..."}
+        return str(
+            item.get("name") or item.get("professional") or next(iter(item.values()), "")
+        ).strip()
+    return str(item).strip()
+
+
+def _filter_professionals(raw_list: list) -> list[str]:
+    """Deduplicate professionals by lowercase+strip. Preserve original casing of first seen."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in raw_list:
+        key = item.lower().strip()
+        if key and key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result
+
+
+def _safe_list(value, default: list) -> list:
+    """Handle str/list/dict DSPy output shapes. Already handles ast.literal_eval fallback."""
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if isinstance(value, str):
+        try:
+            import ast
+            parsed = ast.literal_eval(value)
+            if isinstance(parsed, list):
+                return [str(v).strip() for v in parsed]
+        except Exception:
+            pass
+        return [v.strip() for v in value.split(",") if v.strip()]
+    return default
 
 
 def extract_resources(conversations: list, clinic_name: str) -> ResourcesResult:
@@ -93,7 +136,33 @@ def extract_resources(conversations: list, clinic_name: str) -> ResourcesResult:
     Returns:
         ResourcesResult with professionals list and schedule_type
     """
-    raise NotImplementedError
+    if not conversations:
+        logger.warning("extract_resources(): conversations list is empty — skipping DSPy call.")
+        return ResourcesResult(schedule_type="single")
+
+    if not _resources_module:
+        return ResourcesResult(error="ResourcesModule not initialized.")
+
+    try:
+        from analyzer.shadow_dna import _build_sample
+        sample = _build_sample(conversations, max_convs=10)
+
+        pred = _resources_module.forward(conversations_sample=sample, clinic_name=clinic_name)
+
+        # Extract professionals — handle list of str or list of dicts
+        raw_professionals = _safe_list(pred.professionals, [])
+        named_professionals = [_safe_professional_name(item) for item in raw_professionals]
+        professionals = _filter_professionals([p for p in named_professionals if p])
+
+        # Extract and validate schedule_type
+        raw_schedule_type = str(pred.schedule_type).strip().lower()
+        schedule_type = raw_schedule_type if raw_schedule_type in VALID_SCHEDULE_TYPES else "single"
+
+        return ResourcesResult(professionals=professionals, schedule_type=schedule_type)
+
+    except Exception as e:
+        logger.warning("extract_resources() failed: %s", e)
+        return ResourcesResult(error=str(e))
 
 
 def count_service_mentions(service_names: list[str], conversations: list) -> list[dict]:
@@ -107,7 +176,25 @@ def count_service_mentions(service_names: list[str], conversations: list) -> lis
     Returns:
         list of dicts [{"name": str, "mention_count": int}] sorted by mention_count DESC
     """
-    raise NotImplementedError
+    if not service_names:
+        return []
+
+    # Build corpus from clinic messages only (not patient messages)
+    all_clinic_content = [
+        msg.content.lower()
+        for conv in conversations
+        for msg in conv.clinic_messages
+    ]
+
+    results = []
+    for service in service_names:
+        name = service.strip()
+        if not name:
+            continue
+        count = sum(1 for content in all_clinic_content if name.lower() in content)
+        results.append({"name": name, "mention_count": count})
+
+    return sorted(results, key=lambda x: x["mention_count"], reverse=True)
 
 
 def persist_resources(
@@ -130,7 +217,51 @@ def persist_resources(
         schedule_type: 'single' | 'by_professional' | 'by_room'
         services:      list of dicts [{"name": str, "mention_count": int}]
     """
-    raise NotImplementedError
+    # Step 1: Delete unconfirmed resources and services
+    db.table("la_resources").delete().eq("clinic_id", clinic_id).eq("confirmed", False).execute()
+    db.table("la_services").delete().eq("clinic_id", clinic_id).eq("confirmed", False).execute()
+
+    # Step 2: Build professional rows; if none detected, create a schedule_config row
+    if professionals:
+        rows = [
+            {
+                "clinic_id": clinic_id,
+                "job_id": job_id,
+                "resource_type": "professional",
+                "name": name,
+                "schedule_type": schedule_type,
+                "confirmed": False,
+            }
+            for name in professionals
+        ]
+    else:
+        rows = [
+            {
+                "clinic_id": clinic_id,
+                "job_id": job_id,
+                "resource_type": "schedule_config",
+                "name": "default",
+                "schedule_type": schedule_type,
+                "confirmed": False,
+            }
+        ]
+
+    # Step 3: Insert resource rows
+    db.table("la_resources").insert(rows).execute()
+
+    # Step 4: Insert service rows (if any)
+    if services:
+        svc_rows = [
+            {
+                "clinic_id": clinic_id,
+                "job_id": job_id,
+                "name": svc["name"],
+                "mention_count": svc["mention_count"],
+                "confirmed": False,
+            }
+            for svc in services
+        ]
+        db.table("la_services").insert(svc_rows).execute()
 
 
 def infer_and_persist_resources(
@@ -155,4 +286,28 @@ def infer_and_persist_resources(
         shadow_dna:     ShadowDNA result — local_procedures feeds SVC-01
         db:             Supabase client (defaults to get_db())
     """
-    raise NotImplementedError
+    if not conversations:
+        logger.warning(
+            "infer_and_persist_resources(): conversations list is empty for clinic %s — skipping.",
+            clinic_id,
+        )
+        return
+
+    if db is None:
+        from db import get_db
+        db = get_db()
+
+    result = extract_resources(conversations, clinic_name)
+
+    # Guard against None local_procedures
+    service_names = (shadow_dna.local_procedures if shadow_dna else None) or []
+    services = count_service_mentions(service_names, conversations)
+
+    persist_resources(
+        db=db,
+        clinic_id=clinic_id,
+        job_id=job_id,
+        professionals=result.professionals,
+        schedule_type=result.schedule_type,
+        services=services,
+    )
