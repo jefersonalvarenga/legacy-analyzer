@@ -81,7 +81,10 @@ Plans:
   2. la_resources contem schedule_type inferido (single / by_professional / by_room) baseado nos padroes das conversas
   3. la_services contem os procedimentos e servicos mencionados pela clinica (ex: implante, clareamento, ortodontia) com clinic_id correto
   4. Cada registro em la_services inclui frequencia de mencao, permitindo ao admin identificar os servicos mais relevantes para a clinica
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 08-01-PLAN.md — SQL migration (la_resources + la_services) + test stubs RED + module skeleton
+- [ ] 08-02-PLAN.md — Full implementation GREEN + dspy_pipeline registration
 
 ### Phase 9: Pipeline Integration
 **Goal**: Analise completa end-to-end funciona com mensagens vindas do Evolution: do ingestor ao blueprint salvo em la_blueprints com clinic_id correto para a Sofia consumir
@@ -104,5 +107,5 @@ Note: Phase 8 depends on Phase 6 (not Phase 7). Phase 9 depends on both Phase 7 
 | 1–5. Pipeline Local | v0 | - | Complete | 2026-03-13 |
 | 6. Evolution Ingestor | 1/1 | Complete   | 2026-03-16 | - |
 | 7. FastAPI Endpoints | v1.1 | 0/1 | Not started | - |
-| 8. Resources and Services Inference | v1.1 | 0/TBD | Not started | - |
+| 8. Resources and Services Inference | v1.1 | 0/2 | Not started | - |
 | 9. Pipeline Integration | v1.1 | 0/TBD | Not started | - |
