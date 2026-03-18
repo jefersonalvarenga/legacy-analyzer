@@ -29,6 +29,7 @@ from typing import Optional
 import dspy
 
 from analyzer.parser import Conversation, Message
+from analyzer.dspy_pipeline import get_aggregate_lm
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +59,16 @@ class ShadowDNASignature(dspy.Signature):
     Responda em português. Seja específico e baseado nos textos reais.
     """
     conversations_sample: str = dspy.InputField(
-        desc="Amostra de até 5 conversas concatenadas (início e fim de cada uma)"
+        desc="Amostra de até 10 conversas concatenadas (início e fim de cada uma)"
     )
     clinic_name: str = dspy.InputField(desc="Nome da clínica")
+    payment_mentions_raw: str = dspy.InputField(
+        desc=(
+            "Mensagens reais que mencionam formas de pagamento, parcelamento, PIX ou descontos. "
+            "Extraídas de TODAS as conversas (não apenas da amostra). "
+            "Use para preencher local_payment_conditions com precisão."
+        )
+    )
 
     tone_classification: str = dspy.OutputField(
         desc="Tom dominante: Formal, Informal, Empático, Direto ou Misto"
@@ -125,17 +133,92 @@ class ShadowDNASignature(dspy.Signature):
             "Formato: [{\"step\": \"Saudação\", \"example\": \"Bom dia! Aqui é...\"}, ...]"
         )
     )
+    operating_hours: dict = dspy.OutputField(
+        desc=(
+            "Horário de funcionamento da clínica inferido das conversas. "
+            "Retorne um dict com as chaves 'open' (hora de abertura, ex: '08:00'), "
+            "'close' (hora de encerramento, ex: '18:00') e 'days' (lista de dias em inglês, "
+            "ex: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']). "
+            "Se não for possível inferir, retorne {}."
+        )
+    )
+    source_signals: dict = dspy.OutputField(
+        desc=(
+            "Sinais de origem por canal extraídos das conversas. "
+            "Dict com chaves de canal ('instagram', 'google', 'referral', etc.) "
+            "e valor sendo lista de frases REAIS copiadas das conversas que indicam aquele canal. "
+            "Ex: {\"instagram\": [\"vi no post\", \"vi no reels\"], \"google\": [\"pesquisei no google\"]}. "
+            "Use apenas canais com evidência real nas conversas. Se nenhum, retorne {}."
+        )
+    )
 
 
 class ShadowDNAModule(dspy.Module):
     def __init__(self):
         self.predict = dspy.Predict(ShadowDNASignature)
 
-    def forward(self, conversations_sample: str, clinic_name: str):
+    def forward(self, conversations_sample: str, clinic_name: str, payment_mentions_raw: str = ""):
         return self.predict(
             conversations_sample=conversations_sample,
             clinic_name=clinic_name,
+            payment_mentions_raw=payment_mentions_raw,
         )
+
+
+class ReturningPatientPlaybookSignature(dspy.Signature):
+    """
+    A partir de conversas de WhatsApp de uma clínica que contêm sinais de pacientes
+    recorrentes (remarcar, cancelar, retorno), extraia o playbook de atendimento para
+    esses cenários. Responda em português. Use mensagens REAIS das conversas.
+    Vocabulário canônico de element: greeting, identification, connection,
+    active_listening, technical_details, before_after, insurances, pricing_payment,
+    objections, scheduling_slots, confirmation, closing.
+    """
+    conversations_sample: str = dspy.InputField(
+        desc="Amostra de conversas com sinais de recorrência (remarcar, cancelar, retorno, 'já fui aí')"
+    )
+
+    reschedule_elements: list = dspy.OutputField(
+        desc=(
+            "Lista de elementos do fluxo de remarcação. Cada item é um dict com: "
+            "'element' (do vocabulário canônico), 'initiated_by' ('sofia' ou 'patient'), "
+            "'trigger_signals' (lista de frases que ativam), 'blocked_by' (lista de impedimentos), "
+            "'real_example' (mensagem real copiada das conversas). "
+            "Formato: [{\"element\": \"greeting\", \"initiated_by\": \"sofia\", "
+            "\"trigger_signals\": [\"quero remarcar\"], \"blocked_by\": [], "
+            "\"real_example\": \"...\"}]"
+        )
+    )
+    cancellation_elements: list = dspy.OutputField(
+        desc=(
+            "Lista de elementos do fluxo de cancelamento. Mesmo formato de reschedule_elements. "
+            "Foco em: como a clínica reage ao cancelamento, tenta reverter, confirma cancelamento."
+        )
+    )
+    followup_elements: list = dspy.OutputField(
+        desc=(
+            "Lista de elementos do fluxo de retorno/acompanhamento pós-consulta. "
+            "Mesmo formato de reschedule_elements. "
+            "Foco em: como a clínica agenda retorno, confirma próxima consulta."
+        )
+    )
+    reschedule_example: str = dspy.OutputField(
+        desc="Mensagem REAL da clínica ao tratar uma remarcação (copie do texto das conversas)"
+    )
+    cancellation_example: str = dspy.OutputField(
+        desc="Mensagem REAL da clínica ao tratar um cancelamento (copie do texto das conversas)"
+    )
+    followup_example: str = dspy.OutputField(
+        desc="Mensagem REAL da clínica ao tratar um retorno ou acompanhamento (copie do texto das conversas)"
+    )
+
+
+class ReturningPatientPlaybookModule(dspy.Module):
+    def __init__(self):
+        self.predict = dspy.Predict(ReturningPatientPlaybookSignature)
+
+    def forward(self, conversations_sample: str):
+        return self.predict(conversations_sample=conversations_sample)
 
 
 # ------------------------------------------------------------------
@@ -187,6 +270,10 @@ class ShadowDNA:
 
     # Attendance flow steps (ordered, with example messages)
     attendance_flow_steps: list[dict] = field(default_factory=list)
+
+    # Clinic profile extras
+    operating_hours: Optional[dict] = None
+    source_signals: dict[str, list] = field(default_factory=dict)
 
     # Insurance mention counts (pure Python count, filled after LLM extraction)
     insurance_mention_counts: dict[str, int] = field(default_factory=dict)
@@ -272,14 +359,54 @@ def _compute_quantitative(conversations: list[Conversation]) -> dict:
     }
 
 
-def _build_sample(conversations: list[Conversation], max_convs: int = 5) -> str:
-    """
-    Build a text sample of up to max_convs conversations for the LLM.
-    Takes first 10 + last 10 messages of each to stay within context.
-    """
-    sample_parts = []
-    sample = conversations[:max_convs]
+# Keywords that indicate payment-related messages
+_PAYMENT_KEYWORDS = re.compile(
+    r"parcel|pix|descont|juros|\bx\s+no\b|\bx\s+sem\b|\d+x|\bà\s+vista\b|cartão|crédito|débito|pagament",
+    re.IGNORECASE,
+)
 
+
+def _extract_payment_mentions(conversations: list[Conversation], max_msgs: int = 30) -> str:
+    """
+    Scan ALL conversations for messages mentioning payment methods.
+    Returns a deduplicated, truncated string of real payment-related messages.
+    """
+    seen: set[str] = set()
+    results: list[str] = []
+
+    for conv in conversations:
+        for msg in conv.clinic_messages:  # clinic messages describe payment terms
+            if _PAYMENT_KEYWORDS.search(msg.content):
+                normalized = msg.content.strip()
+                if normalized not in seen:
+                    seen.add(normalized)
+                    results.append(f"- {normalized}")
+                    if len(results) >= max_msgs:
+                        break
+        if len(results) >= max_msgs:
+            break
+
+    if not results:
+        return "(nenhuma menção de pagamento encontrada nas conversas)"
+    return "\n".join(results)
+
+
+def _build_sample(conversations: list[Conversation], max_convs: int = 10) -> str:
+    """
+    Build a text sample prioritizing conversations with payment mentions.
+    Takes up to max_convs conversations, first 10 + last 10 messages each.
+    """
+    # Sort: payment-mentioning conversations first
+    def has_payment(conv: Conversation) -> bool:
+        return any(
+            _PAYMENT_KEYWORDS.search(m.content)
+            for m in conv.clinic_messages
+        )
+
+    sorted_convs = sorted(conversations, key=lambda c: (0 if has_payment(c) else 1))
+    sample = sorted_convs[:max_convs]
+
+    sample_parts = []
     for conv in sample:
         msgs = conv.messages
         excerpt = msgs[:10] + (msgs[-10:] if len(msgs) > 20 else [])
@@ -288,7 +415,7 @@ def _build_sample(conversations: list[Conversation], max_convs: int = 5) -> str:
             f"--- Conversa com {conv.phone[:7]}*** ---\n" + "\n".join(lines)
         )
 
-    return "\n\n".join(sample_parts)[:12_000]  # safe LLM context limit
+    return "\n\n".join(sample_parts)[:14_000]  # slightly larger budget for 10 convs
 
 
 def _safe_list(value, default: list) -> list:
@@ -352,9 +479,26 @@ def extract_shadow_dna(
         return dna
 
     sample = _build_sample(conversations)
+    payment_mentions = _extract_payment_mentions(conversations)
+    logger.info("Payment mentions pre-scanned: %d unique messages", payment_mentions.count("\n-") + 1)
+
+    agg_lm = get_aggregate_lm()
+    ctx = dspy.context(lm=agg_lm) if agg_lm else None
 
     try:
-        pred = _shadow_module(conversations_sample=sample, clinic_name=clinic_name)
+        if ctx:
+            with ctx:
+                pred = _shadow_module(
+                    conversations_sample=sample,
+                    clinic_name=clinic_name,
+                    payment_mentions_raw=payment_mentions,
+                )
+        else:
+            pred = _shadow_module(
+                conversations_sample=sample,
+                clinic_name=clinic_name,
+                payment_mentions_raw=payment_mentions,
+            )
 
         dna.tone_classification = str(pred.tone_classification).strip() or "Misto"
         dna.greeting_example = str(pred.greeting_example).strip()
@@ -396,6 +540,43 @@ def extract_shadow_dna(
                     ][:6]
             except Exception:
                 dna.attendance_flow_steps = []
+
+        # operating_hours: dict with open/close/days or None
+        raw_hours = pred.operating_hours
+        if isinstance(raw_hours, dict) and raw_hours:
+            dna.operating_hours = raw_hours
+        elif isinstance(raw_hours, str):
+            import ast as _ast
+            try:
+                parsed = _ast.literal_eval(raw_hours)
+                dna.operating_hours = parsed if isinstance(parsed, dict) and parsed else None
+            except Exception:
+                dna.operating_hours = None
+        else:
+            dna.operating_hours = None
+
+        # source_signals: dict channel -> list[str]
+        raw_signals = pred.source_signals
+        if isinstance(raw_signals, dict):
+            dna.source_signals = {
+                str(channel): _safe_list(phrases, [])
+                for channel, phrases in raw_signals.items()
+                if str(channel).strip()
+            }
+        elif isinstance(raw_signals, str):
+            import ast as _ast
+            try:
+                parsed = _ast.literal_eval(raw_signals)
+                if isinstance(parsed, dict):
+                    dna.source_signals = {
+                        str(channel): _safe_list(phrases, [])
+                        for channel, phrases in parsed.items()
+                        if str(channel).strip()
+                    }
+            except Exception:
+                dna.source_signals = {}
+        else:
+            dna.source_signals = {}
 
     except Exception as e:
         logger.warning("Shadow DNA LLM extraction failed: %s", e)

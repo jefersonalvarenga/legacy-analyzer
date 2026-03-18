@@ -52,7 +52,14 @@ def _compute_rag_efficiency(
     all_topics: set[str] = set()
     if analyses:
         for a in analyses:
-            all_topics.update(t.lower() for t in a.topics)
+            for t in a.topics:
+                # DSPy may return dicts or strings depending on model output
+                if isinstance(t, str):
+                    all_topics.add(t.lower())
+                elif isinstance(t, dict):
+                    val = t.get("topic") or t.get("name") or next(iter(t.values()), "")
+                    if val:
+                        all_topics.add(str(val).lower())
 
     total_unique = len(all_topics) or 1
     unresolved = len(shadow_dna.unresolved_queries)
@@ -122,6 +129,7 @@ def build_blueprint(
                 "keywords": shadow_dna.handoff_keywords,
                 "situations": shadow_dna.handoff_situations,
             },
+            "attendance_flow": shadow_dna.attendance_flow_steps,
         },
 
         "shadow_dna_profile": {
@@ -153,6 +161,14 @@ def build_blueprint(
             "leads_lost": financial_kpis.leads_lost,
             "opportunity_loss_value": financial_kpis.opportunity_loss_value,
             "potential_recovery_value": financial_kpis.potential_recovery_value,
+        },
+
+        "clinic_profile": {
+            "operating_hours": shadow_dna.operating_hours,
+            "neighborhood": shadow_dna.local_neighborhoods[0] if shadow_dna.local_neighborhoods else None,
+            "source_signals": shadow_dna.source_signals,
+            "tone": shadow_dna.tone_classification,
+            "agent_name": shadow_dna.agent_suggested_name,
         },
     }
 
