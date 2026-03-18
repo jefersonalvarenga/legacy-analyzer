@@ -323,3 +323,19 @@ CREATE INDEX IF NOT EXISTS idx_la_services_clinic_id     ON la_services(clinic_i
 CREATE INDEX IF NOT EXISTS idx_la_services_job_id        ON la_services(job_id);
 CREATE INDEX IF NOT EXISTS idx_la_services_mention_count ON la_services(mention_count DESC);
 ALTER TABLE la_services ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- MIGRATION: Phase 9 — Pipeline Integration
+-- 2026-03-17
+-- ============================================================
+
+-- 1. Add clinic_id FK to la_blueprints (Sofia polling uses this)
+--    Sofia query: SELECT * FROM la_blueprints WHERE clinic_id = '<uuid>' ORDER BY created_at DESC LIMIT 1
+ALTER TABLE la_blueprints
+    ADD COLUMN IF NOT EXISTS clinic_id UUID REFERENCES sf_clinics(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_la_blueprints_clinic_id ON la_blueprints(clinic_id);
+
+-- 2. Make client_id nullable — Evolution-triggered jobs have no la_clients record
+ALTER TABLE la_blueprints
+    ALTER COLUMN client_id DROP NOT NULL;
