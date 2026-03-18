@@ -73,6 +73,10 @@ class ClientCreate(BaseModel):
     config: dict = {}
 
 
+class AnalyzeRequest(BaseModel):
+    reference_conversation_ids: list[str] | None = None
+
+
 class AnalyzeResponse(BaseModel):
     job_id: str
     clinic_id: str
@@ -121,11 +125,20 @@ def get_client(slug: str):
 # ------------------------------------------------------------------
 
 @app.post("/analyze/{clinic_id}", status_code=202, response_model=AnalyzeResponse)
-async def analyze_clinic(clinic_id: str, background_tasks: BackgroundTasks):
+async def analyze_clinic(
+    clinic_id: str,
+    background_tasks: BackgroundTasks,
+    body: AnalyzeRequest = AnalyzeRequest(),
+):
     """
     Trigger analysis for a clinic using Evolution API messages.
     Validates clinic_id in sf_clinics (fail-fast 404), creates job, fires
     background processing, and returns job_id immediately.
+
+    Optional body:
+      reference_conversation_ids: list of conversation IDs the admin selected
+        as reference material for playbook generation (Phase 8.1 usage).
+        Currently stored for future use — run_analysis() does not yet consume it.
     """
     db = get_db()
 

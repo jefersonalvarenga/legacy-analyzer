@@ -339,3 +339,13 @@ CREATE INDEX IF NOT EXISTS idx_la_blueprints_clinic_id ON la_blueprints(clinic_i
 -- 2. Make client_id nullable — Evolution-triggered jobs have no la_clients record
 ALTER TABLE la_blueprints
     ALTER COLUMN client_id DROP NOT NULL;
+
+-- ============================================================
+-- MIGRATION: Phase 8.1 — requires_evaluation on la_services
+-- 2026-03-18
+-- ============================================================
+
+-- Indicates whether the service requires an in-person evaluation before
+-- the procedure (e.g., implants, orthodontics). LA infers this; admin confirms.
+ALTER TABLE la_services
+    ADD COLUMN IF NOT EXISTS requires_evaluation BOOLEAN NOT NULL DEFAULT FALSE;
