@@ -29,8 +29,8 @@
 
 ### Pipeline
 
-- [ ] **PIPE-01**: Pipeline completo (metricas, DSPy, desfechos, Shadow DNA, blueprint) funciona com mensagens do Evolution
-- [ ] **PIPE-02**: Blueprint salvo em `la_blueprints` com `clinic_id` correto para a Sofia consumir
+- [x] **PIPE-01**: Pipeline completo (metricas, DSPy, desfechos, Shadow DNA, blueprint) funciona com mensagens do Evolution
+- [x] **PIPE-02**: Blueprint salvo em `la_blueprints` com `clinic_id` correto para a Sofia consumir
 
 ## v2 Requirements
 
@@ -71,8 +71,8 @@
 | RES-02 | Phase 8 | Complete |
 | SVC-01 | Phase 8 | Complete |
 | SVC-02 | Phase 8 | Complete |
-| PIPE-01 | Phase 9 | Pending |
-| PIPE-02 | Phase 9 | Pending |
+| PIPE-01 | Phase 9 | Complete |
+| PIPE-02 | Phase 9 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 12 total

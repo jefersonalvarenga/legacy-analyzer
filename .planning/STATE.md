@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Evolution API Go Live
 status: completed
-stopped_at: Completed 08-02-PLAN.md — Resources and Services Inference (TDD GREEN)
-last_updated: "2026-03-16T21:01:11.627Z"
+stopped_at: Completed 09-01-PLAN.md — Pipeline Integration TDD RED
+last_updated: "2026-03-18T01:09:09.273Z"
 last_activity: 2026-03-16 — 06-01 Evolution Ingestor implemented
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
   percent: 11
 ---
 
@@ -53,6 +53,7 @@ Progress: [█░░░░░░░░░] 11%
 | Phase 07-fastapi-endpoints P01 | 2 | 3 tasks | 4 files |
 | Phase 08-resources-and-services-inference P01 | 3min | 2 tasks | 3 files |
 | Phase 08-resources-and-services-inference P02 | 12 | 2 tasks | 2 files |
+| Phase 09-pipeline-integration P01 | 2 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,9 @@ Progress: [█░░░░░░░░░] 11%
 - [Phase 08-resources-and-services-inference]: schedule_type denormalized on each la_resources row to mirror sf_resources schema
 - [Phase 08-resources-and-services-inference]: DSPy module called via .forward() directly for testability with MagicMock patches
 - [Phase 08-resources-and-services-inference]: Services inserted before resources in persist_resources() to match mock call_args_list assertion ordering
+- [Phase 09-pipeline-integration]: Use create=True on @patch decorators so RED stubs work before ingest_from_evolution and infer_and_persist_resources are imported in analysis_runner.py
+- [Phase 09-pipeline-integration]: la_blueprints.client_id made nullable to support Evolution-triggered jobs that have no la_clients record
+- [Phase 09-pipeline-integration]: clinic_id FK on la_blueprints uses ON DELETE SET NULL to preserve historical blueprints if clinic is deleted
 
 ### Blockers/Concerns
 
@@ -89,6 +93,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16T20:58:14.055Z
-Stopped at: Completed 08-02-PLAN.md — Resources and Services Inference (TDD GREEN)
+Last session: 2026-03-18T01:09:09.271Z
+Stopped at: Completed 09-01-PLAN.md — Pipeline Integration TDD RED
 Resume file: None
