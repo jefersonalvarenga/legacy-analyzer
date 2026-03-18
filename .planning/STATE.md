@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: — Evolution API Go Live
 status: completed
-stopped_at: Completed 09-01-PLAN.md — Pipeline Integration TDD RED
-last_updated: "2026-03-18T01:09:09.273Z"
+stopped_at: Completed 09-02-PLAN.md — Pipeline Integration GREEN
+last_updated: "2026-03-18T01:28:40.560Z"
 last_activity: 2026-03-16 — 06-01 Evolution Ingestor implemented
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 11
 ---
 
@@ -54,6 +54,7 @@ Progress: [█░░░░░░░░░] 11%
 | Phase 08-resources-and-services-inference P01 | 3min | 2 tasks | 3 files |
 | Phase 08-resources-and-services-inference P02 | 12 | 2 tasks | 2 files |
 | Phase 09-pipeline-integration P01 | 2 | 2 tasks | 2 files |
+| Phase 09-pipeline-integration P02 | 20 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,7 @@ Progress: [█░░░░░░░░░] 11%
 - [Phase 09-pipeline-integration]: Use create=True on @patch decorators so RED stubs work before ingest_from_evolution and infer_and_persist_resources are imported in analysis_runner.py
 - [Phase 09-pipeline-integration]: la_blueprints.client_id made nullable to support Evolution-triggered jobs that have no la_clients record
 - [Phase 09-pipeline-integration]: clinic_id FK on la_blueprints uses ON DELETE SET NULL to preserve historical blueprints if clinic is deleted
+- [Phase 09-pipeline-integration]: run_analysis() is production-ready: full 16-step pipeline with clinic_id on la_blueprints, non-blocking resource inference, lazy DSPy LM init, and zero-conversation fast-fail guard
 
 ### Blockers/Concerns
 
@@ -93,6 +95,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T01:09:09.271Z
-Stopped at: Completed 09-01-PLAN.md — Pipeline Integration TDD RED
+Last session: 2026-03-18T01:28:40.558Z
+Stopped at: Completed 09-02-PLAN.md — Pipeline Integration GREEN
 Resume file: None
