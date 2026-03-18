@@ -38,10 +38,11 @@ from analyzer.evolution_ingestor import ingest_from_evolution
 from analyzer.metrics import compute_metrics, aggregate_metrics, AggregatedMetrics
 from analyzer.dspy_pipeline import analyze_conversation, configure_lm, SemanticAnalysis
 from analyzer.outcome_detection import detect_outcome, aggregate_outcomes, OutcomeSummary
-from analyzer.shadow_dna import extract_shadow_dna, ShadowDNA
+from analyzer.shadow_dna import extract_shadow_dna, extract_returning_patient_playbook, ShadowDNA
 from analyzer.financial_kpis import compute_financial_kpis, FinancialKPIs
 from analyzer.blueprint import build_blueprint
 from analyzer.resources_inference import infer_and_persist_resources
+from analyzer.playbook_inference import extract_clinic_playbook
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +196,24 @@ def run_analysis(job_id: str, clinic_id: str) -> None:
             logger.warning("[%s] extract_shadow_dna failed (using empty fallback): %s", job_id[:8], e)
             shadow_dna = ShadowDNA()
 
+        # Step 9b: Infer returning-patient playbook (resilient, non-blocking)
+        try:
+            returning_patient_playbook = extract_returning_patient_playbook(conversations)
+        except Exception as e:
+            logger.warning("[%s] extract_returning_patient_playbook failed (skipping): %s", job_id[:8], e)
+            returning_patient_playbook = None
+
+        # Step 9c: Infer clinic playbook (forensic — resilient, non-blocking)
+        try:
+            clinic_playbook = extract_clinic_playbook(
+                conversations,
+                clinic_name,
+                outcome_results=outcome_results,
+            )
+        except Exception as e:
+            logger.warning("[%s] extract_clinic_playbook failed (skipping): %s", job_id[:8], e)
+            clinic_playbook = None
+
         # Step 10: Aggregate outcomes (resilient)
         _set_progress(db, job_id, 85, "Agregando desfechos...")
         try:
@@ -235,6 +254,8 @@ def run_analysis(job_id: str, clinic_id: str) -> None:
                 agg_metrics=agg_metrics,
                 analyses=analyses,
                 generated_at=datetime.utcnow(),
+                returning_patient_playbook=returning_patient_playbook,
+                clinic_playbook=clinic_playbook,
             )
         except Exception as e:
             logger.warning("[%s] build_blueprint failed (using empty fallback): %s", job_id[:8], e)

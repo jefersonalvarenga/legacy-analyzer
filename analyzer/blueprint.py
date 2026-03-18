@@ -77,6 +77,8 @@ def build_blueprint(
     agg_metrics: AggregatedMetrics,
     analyses=None,          # list[SemanticAnalysis]
     generated_at: Optional[datetime] = None,
+    returning_patient_playbook: Optional[dict] = None,
+    clinic_playbook: Optional[dict] = None,
 ) -> dict:
     """
     Assemble and return the full blueprint as a Python dict.
@@ -170,6 +172,10 @@ def build_blueprint(
             "tone": shadow_dna.tone_classification,
             "agent_name": shadow_dna.agent_suggested_name,
         },
+
+        "returning_patient_playbook": returning_patient_playbook or None,
+
+        "clinic_playbook": clinic_playbook or None,
     }
 
     return blueprint

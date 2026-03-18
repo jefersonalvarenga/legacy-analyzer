@@ -289,11 +289,13 @@ class ShadowDNA:
 # ------------------------------------------------------------------
 
 _shadow_module: Optional[ShadowDNAModule] = None
+_returning_patient_module: Optional[ReturningPatientPlaybookModule] = None
 
 
 def init_shadow_module():
-    global _shadow_module
+    global _shadow_module, _returning_patient_module
     _shadow_module = ShadowDNAModule()
+    _returning_patient_module = ReturningPatientPlaybookModule()
 
 
 # ------------------------------------------------------------------
@@ -431,6 +433,128 @@ def _safe_list(value, default: list) -> list:
             pass
         return [v.strip() for v in value.split(",") if v.strip()]
     return default
+
+
+# ------------------------------------------------------------------
+# Returning-patient playbook helpers
+# ------------------------------------------------------------------
+
+# Signals that indicate a recurring/returning patient interaction
+_RECURRENCE_SIGNALS = re.compile(
+    r"quero remarcar|preciso remarcar|remarcar\s+(minha\s+)?consulta"
+    r"|quero cancelar|preciso cancelar|cancelar\s+(minha\s+)?consulta"
+    r"|meu retorno|retorno\s+(é|e)\s+dia|agendar retorno"
+    r"|já fiz aqui|já fui aí|cliente aqui"
+    r"|vim antes|já fiz esse procedimento",
+    re.IGNORECASE,
+)
+
+
+def _has_recurrence_signal(conv: Conversation) -> bool:
+    """Return True if any message in the conversation matches a recurrence signal."""
+    for msg in conv.messages:
+        if _RECURRENCE_SIGNALS.search(msg.content):
+            return True
+    return False
+
+
+def _build_recurrence_sample(conversations: list[Conversation], max_convs: int = 8) -> str:
+    """Build a text sample from conversations with recurrence signals."""
+    sample_parts = []
+    for conv in conversations[:max_convs]:
+        msgs = conv.messages
+        excerpt = msgs[:10] + (msgs[-10:] if len(msgs) > 20 else [])
+        lines = [f"[{m.sender_type.upper()}] {m.sender}: {m.content}" for m in excerpt]
+        sample_parts.append(
+            f"--- Conversa com {conv.phone[:7]}*** ---\n" + "\n".join(lines)
+        )
+    return "\n\n".join(sample_parts)[:12_000]
+
+
+def _validate_playbook_elements(raw: object) -> list[dict]:
+    """Parse and validate a list of playbook element dicts."""
+    import ast as _ast
+
+    if isinstance(raw, str):
+        try:
+            raw = _ast.literal_eval(raw)
+        except Exception:
+            return []
+
+    if not isinstance(raw, list):
+        return []
+
+    validated = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        element = str(item.get("element", "")).strip()
+        if not element:
+            continue
+        validated.append({
+            "element": element,
+            "initiated_by": str(item.get("initiated_by", "sofia")).strip(),
+            "trigger_signals": _safe_list(item.get("trigger_signals", []), []),
+            "blocked_by": _safe_list(item.get("blocked_by", []), []),
+            "real_example": str(item.get("real_example", "")).strip(),
+        })
+    return validated
+
+
+def extract_returning_patient_playbook(
+    conversations: list[Conversation],
+) -> Optional[dict]:
+    """
+    Infer the returning-patient playbook from conversations with recurrence signals.
+
+    Returns a dict with reschedule/cancellation/followup sections, or None if
+    no recurrence signals are found in any conversation.
+    """
+    if not _returning_patient_module:
+        logger.warning(
+            "ReturningPatientPlaybookModule not initialized — call init_shadow_module() first."
+        )
+        return None
+
+    recurrent_convs = [c for c in conversations if _has_recurrence_signal(c)]
+    if not recurrent_convs:
+        logger.info("No recurrence signals found — skipping returning_patient_playbook.")
+        return None
+
+    logger.info(
+        "Found %d conversations with recurrence signals — inferring playbook.",
+        len(recurrent_convs),
+    )
+
+    sample = _build_recurrence_sample(recurrent_convs)
+    agg_lm = get_aggregate_lm()
+    ctx = dspy.context(lm=agg_lm) if agg_lm else None
+
+    try:
+        if ctx:
+            with ctx:
+                pred = _returning_patient_module(conversations_sample=sample)
+        else:
+            pred = _returning_patient_module(conversations_sample=sample)
+
+        return {
+            "reschedule": {
+                "elements": _validate_playbook_elements(pred.reschedule_elements),
+                "real_example": str(pred.reschedule_example).strip(),
+            },
+            "cancellation": {
+                "elements": _validate_playbook_elements(pred.cancellation_elements),
+                "real_example": str(pred.cancellation_example).strip(),
+            },
+            "followup": {
+                "elements": _validate_playbook_elements(pred.followup_elements),
+                "real_example": str(pred.followup_example).strip(),
+            },
+        }
+
+    except Exception as e:
+        logger.warning("ReturningPatientPlaybook LLM extraction failed: %s", e)
+        return None
 
 
 # ------------------------------------------------------------------
