@@ -94,7 +94,10 @@ Plans:
   1. Dado clinic_id de uma clinica com mensagens no Evolution, o pipeline executa metricas, DSPy, deteccao de desfechos, Shadow DNA e produz blueprint_json valido
   2. Blueprint e salvo em la_blueprints com clinic_id correto — Sofia consegue consumir via polling WHERE clinic_id = UUID ORDER BY created_at DESC LIMIT 1 sem nenhuma alteracao no contrato existente
   3. la_resources e la_services sao persistidos durante a mesma execucao que salva o blueprint (analise atomica por clinic_id)
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 09-01-PLAN.md — SQL migration (la_blueprints clinic_id) + TDD RED stubs (PIPE-01, PIPE-02)
+- [ ] 09-02-PLAN.md — Full run_analysis() pipeline implementation GREEN + human verify checkpoint
 
 ## Progress
 
@@ -108,4 +111,4 @@ Note: Phase 8 depends on Phase 6 (not Phase 7). Phase 9 depends on both Phase 7 
 | 6. Evolution Ingestor | 1/1 | Complete   | 2026-03-16 | - |
 | 7. FastAPI Endpoints | v1.1 | 0/1 | Not started | - |
 | 8. Resources and Services Inference | 2/2 | Complete   | 2026-03-16 | - |
-| 9. Pipeline Integration | v1.1 | 0/TBD | Not started | - |
+| 9. Pipeline Integration | v1.1 | 0/2 | Not started | - |
