@@ -4,6 +4,12 @@ playbook_inference.py
 Forensic playbook inference — reads conversations without a pre-defined
 template and produces a free-form description of how the clinic operates.
 
+Also provides per-service playbook extraction (ServicePlaybookSignature)
+that builds a structured playbook for each detected service, based on
+conversations where that service was mentioned and the outcome was
+"agendado". Admin can supply reference_conversation_ids to restrict
+the source conversations.
+
 The LA acts as a forensic investigator: no prior hypothesis, no external
 references. It observes the conversations and describes what it finds.
 
@@ -153,6 +159,7 @@ _playbook_module: Optional[ClinicPlaybookModule] = None
 def init_playbook_module():
     global _playbook_module
     _playbook_module = ClinicPlaybookModule()
+    init_service_playbook_module()
 
 
 # ------------------------------------------------------------------
@@ -270,6 +277,305 @@ def _validate_phases(raw) -> list:
 # ------------------------------------------------------------------
 # Main extraction function
 # ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# ServicePlaybook — per-service playbook
+# ------------------------------------------------------------------
+
+class ServicePlaybookSignature(dspy.Signature):
+    """
+    Voce e um especialista em vendas consultivas para clinicas de saude.
+    A partir de conversas onde o servico foi mencionado e o paciente agendou,
+    extraia o playbook de atendimento especifico para esse servico.
+
+    REGRAS OBRIGATORIAS:
+    - Use apenas vocabulario canonico para 'element':
+      greeting, identification, connection, active_listening, technical_details,
+      before_after, insurances, pricing_payment, objections, scheduling_slots,
+      confirmation, closing
+    - 'trigger_signals' DEVEM ser frases REAIS dos pacientes copiadas das conversas.
+    - 'real_example' DEVE ser mensagem REAL da clinica copiada das conversas, ou null.
+    - 'blocked_by' usa vocabulario canonico:
+      already_sent, evaluation_not_done, price_not_asked, appointment_confirmed
+    - 'default_flow': 'evaluation_first' se o servico exige avaliacao antes do
+      agendamento definitivo, 'direct_booking' se pode agendar diretamente.
+    - Inclua apenas elementos que realmente apareceram nas conversas.
+    - Responda em portugues.
+    """
+
+    service_name: str = dspy.InputField(desc="Nome do servico/procedimento a analisar")
+    conversations_sample: str = dspy.InputField(
+        desc=(
+            "Conversas onde esse servico foi mencionado e o desfecho foi agendado. "
+            "Formato: blocos por conversa, mensagens com prefixo [CLINIC] ou [PATIENT]."
+        )
+    )
+
+    requires_evaluation: bool = dspy.OutputField(
+        desc=(
+            "True se o servico tipicamente exige uma consulta de avaliacao antes do "
+            "procedimento principal, False se pode ser agendado diretamente."
+        )
+    )
+    default_flow: str = dspy.OutputField(
+        desc=(
+            "Fluxo padrao para este servico: "
+            "'evaluation_first' se exige avaliacao antes do agendamento definitivo, "
+            "'direct_booking' se o agendamento e feito diretamente sem avaliacao previa."
+        )
+    )
+    elements: list = dspy.OutputField(
+        desc=(
+            "Lista de elementos do playbook para este servico. "
+            "Cada item e um dict com: "
+            "  'element' (str — um do vocabulario canonico), "
+            "  'initiated_by' (str — 'sofia' ou 'patient'), "
+            "  'trigger_signals' (lista de frases REAIS do paciente que ativam este elemento), "
+            "  'blocked_by' (lista usando vocabulario canonico: already_sent, "
+            "    evaluation_not_done, price_not_asked, appointment_confirmed), "
+            "  'real_example' (str — mensagem REAL da clinica copiada das conversas, ou null). "
+            "Inclua apenas elementos que realmente apareceram nas conversas. "
+            "Formato: [{\"element\": \"connection\", \"initiated_by\": \"sofia\", "
+            "\"trigger_signals\": [...], \"blocked_by\": [...], \"real_example\": \"...\"}]"
+        )
+    )
+
+
+class ServicePlaybookModule(dspy.Module):
+    def __init__(self):
+        self.predict = dspy.Predict(ServicePlaybookSignature)
+
+    def forward(self, service_name: str, conversations_sample: str):
+        return self.predict(
+            service_name=service_name,
+            conversations_sample=conversations_sample,
+        )
+
+
+# Module instance (shared, lazy init)
+_service_playbook_module: Optional[ServicePlaybookModule] = None
+
+
+def init_service_playbook_module():
+    global _service_playbook_module
+    _service_playbook_module = ServicePlaybookModule()
+
+
+# ------------------------------------------------------------------
+# Service playbook helpers
+# ------------------------------------------------------------------
+
+_VALID_BLOCKED_BY = frozenset({
+    "already_sent", "evaluation_not_done", "price_not_asked", "appointment_confirmed",
+})
+
+_VALID_DEFAULT_FLOWS = frozenset({"evaluation_first", "direct_booking"})
+
+
+def _validate_service_element(raw: dict) -> dict:
+    """Normalise a single service playbook element dict."""
+    element = str(raw.get("element", "")).strip()
+    if element not in _VALID_ELEMENTS:
+        element = "connection"  # safe fallback
+
+    initiated_by = str(raw.get("initiated_by", "sofia")).strip()
+    if initiated_by not in ("sofia", "patient"):
+        initiated_by = "sofia"
+
+    trigger_signals = raw.get("trigger_signals", [])
+    if not isinstance(trigger_signals, list):
+        trigger_signals = []
+
+    blocked_by_raw = raw.get("blocked_by", [])
+    if not isinstance(blocked_by_raw, list):
+        blocked_by_raw = []
+    # Keep only canonical values
+    blocked_by = [str(b).strip() for b in blocked_by_raw if str(b).strip() in _VALID_BLOCKED_BY]
+
+    real_example = raw.get("real_example")
+    if real_example is not None:
+        real_example = str(real_example).strip() or None
+
+    return {
+        "element": element,
+        "initiated_by": initiated_by,
+        "trigger_signals": [str(s).strip() for s in trigger_signals if str(s).strip()],
+        "blocked_by": blocked_by,
+        "real_example": real_example,
+    }
+
+
+def _validate_service_elements(raw) -> list:
+    """Validate and normalise the elements output from ServicePlaybookSignature."""
+    if not isinstance(raw, list):
+        if isinstance(raw, str):
+            import ast
+            try:
+                parsed = ast.literal_eval(raw)
+                if isinstance(parsed, list):
+                    raw = parsed
+                else:
+                    return []
+            except Exception:
+                return []
+        else:
+            return []
+    return [_validate_service_element(e) for e in raw if isinstance(e, dict)]
+
+
+def _service_mentioned_in_conversation(conv: "Conversation", service_name: str) -> bool:
+    """Return True if any message in the conversation mentions the service name."""
+    service_lower = service_name.lower()
+    for msg in conv.messages:
+        if service_lower in msg.content.lower():
+            return True
+    return False
+
+
+def _build_service_sample(conversations: list, max_chars: int = _SAMPLE_BUDGET) -> str:
+    """Build a conversation sample string from the given conversations list."""
+    parts = []
+    for conv in conversations:
+        msgs = conv.messages
+        excerpt = msgs[:10] + (msgs[-10:] if len(msgs) > 20 else [])
+        lines = [
+            f"[{'CLINIC' if m.sender_type == 'clinic' else 'PATIENT'}] {m.sender}: {m.content}"
+            for m in excerpt
+        ]
+        parts.append(
+            f"--- Conversa com {conv.phone[:7]}*** ---\n" + "\n".join(lines)
+        )
+    return "\n\n".join(parts)[:max_chars]
+
+
+def extract_service_playbooks(
+    conversations: list,
+    services: list[str],
+    reference_ids: "list[str] | None" = None,
+    outcome_results=None,  # list[OutcomeResult] — parallel to conversations
+) -> list[dict]:
+    """
+    Extract a per-service playbook for each service in `services`.
+
+    For each service:
+      - Filters conversations where the service is mentioned AND outcome == "agendado"
+      - If reference_ids is provided, restricts to those conversation phones/ids
+      - Skips service if fewer than 2 matching conversations found
+      - Calls ServicePlaybookModule to extract elements
+      - Returns the assembled playbook dict
+
+    Args:
+        conversations:   list of Conversation objects
+        services:        list of service/procedure name strings
+        reference_ids:   optional list of conversation identifiers (phone numbers or
+                         source_filename values) to restrict the source
+        outcome_results: optional list of OutcomeResult parallel to conversations
+
+    Returns:
+        list of playbook dicts — one per service with sufficient data.
+        Services with < 2 matching conversations are omitted.
+    """
+    if not _service_playbook_module:
+        logger.warning(
+            "ServicePlaybookModule not initialized — call init_service_playbook_module() first."
+        )
+        return []
+
+    if not services:
+        return []
+
+    # Build a set of agendado conversation indices for fast lookup
+    agendado_set: set[int] = set()
+    if outcome_results and len(outcome_results) == len(conversations):
+        for idx, outcome in enumerate(outcome_results):
+            if getattr(outcome, "outcome", None) == "agendado":
+                agendado_set.add(idx)
+    else:
+        # No outcome info — treat all as eligible
+        agendado_set = set(range(len(conversations)))
+
+    # Build reference set if supplied
+    ref_set: "set[str] | None" = None
+    if reference_ids:
+        ref_set = {str(r).strip() for r in reference_ids if str(r).strip()}
+
+    result: list[dict] = []
+
+    agg_lm = get_aggregate_lm()
+    ctx = dspy.context(lm=agg_lm) if agg_lm else None
+
+    for service in services:
+        if not service or not service.strip():
+            continue
+
+        # Filter: agendado + service mentioned
+        eligible: list = []
+        for idx, conv in enumerate(conversations):
+            if idx not in agendado_set:
+                continue
+            # Reference filter
+            if ref_set is not None:
+                conv_id = str(getattr(conv, "phone", "") or getattr(conv, "source_filename", ""))
+                if conv_id not in ref_set:
+                    continue
+            # Service mention filter
+            if not _service_mentioned_in_conversation(conv, service):
+                continue
+            eligible.append(conv)
+
+        if len(eligible) < 2:
+            logger.info(
+                "Service '%s': only %d eligible conversations (< 2) — skipping.",
+                service, len(eligible),
+            )
+            continue
+
+        logger.info(
+            "Service '%s': %d eligible conversations — inferring playbook.",
+            service, len(eligible),
+        )
+
+        sample = _build_service_sample(eligible)
+
+        try:
+            if ctx:
+                with ctx:
+                    pred = _service_playbook_module(
+                        service_name=service,
+                        conversations_sample=sample,
+                    )
+            else:
+                pred = _service_playbook_module(
+                    service_name=service,
+                    conversations_sample=sample,
+                )
+
+            # Normalise requires_evaluation
+            req_eval = pred.requires_evaluation
+            if isinstance(req_eval, str):
+                req_eval = req_eval.strip().lower() in ("true", "yes", "sim", "1")
+            else:
+                req_eval = bool(req_eval)
+
+            # Normalise default_flow
+            raw_flow = str(pred.default_flow).strip().lower()
+            default_flow = raw_flow if raw_flow in _VALID_DEFAULT_FLOWS else "direct_booking"
+
+            elements = _validate_service_elements(pred.elements)
+
+            result.append({
+                "service_name": service.strip(),
+                "requires_evaluation": req_eval,
+                "default_flow": default_flow,
+                "elements": elements,
+            })
+
+        except Exception as e:
+            logger.warning("ServicePlaybook LLM extraction failed for '%s': %s", service, e)
+            continue
+
+    return result
+
 
 def extract_clinic_playbook(
     conversations: list[Conversation],

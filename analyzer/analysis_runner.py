@@ -42,7 +42,7 @@ from analyzer.shadow_dna import extract_shadow_dna, extract_returning_patient_pl
 from analyzer.financial_kpis import compute_financial_kpis, FinancialKPIs
 from analyzer.blueprint import build_blueprint
 from analyzer.resources_inference import infer_and_persist_resources
-from analyzer.playbook_inference import extract_clinic_playbook
+from analyzer.playbook_inference import extract_clinic_playbook, extract_service_playbooks
 
 logger = logging.getLogger(__name__)
 
@@ -103,10 +103,22 @@ def _set_progress(db, job_id: str, progress: int, step: str) -> None:
 # Main orchestrator
 # ---------------------------------------------------------------------------
 
-def run_analysis(job_id: str, clinic_id: str) -> None:
+def run_analysis(
+    job_id: str,
+    clinic_id: str,
+    reference_conversation_ids: "list[str] | None" = None,
+) -> None:
     """
     Full end-to-end pipeline executed after POST /analyze/{clinic_id} returns.
     Called via FastAPI BackgroundTasks.add_task(run_analysis, job_id, clinic_id).
+
+    Args:
+        job_id:                      UUID of the la_analysis_jobs row
+        clinic_id:                   UUID of the clinic in sf_clinics
+        reference_conversation_ids:  Optional list of conversation identifiers
+                                     (phone numbers or source_filename values)
+                                     that admin selected as reference material
+                                     for service playbook generation.
 
     Individual analysis steps (metrics, DSPy, shadow DNA, blueprint assembly)
     are wrapped in try/except to produce degraded-but-valid output on partial
@@ -214,6 +226,18 @@ def run_analysis(job_id: str, clinic_id: str) -> None:
             logger.warning("[%s] extract_clinic_playbook failed (skipping): %s", job_id[:8], e)
             clinic_playbook = None
 
+        # Step 9d: Infer per-service playbooks (resilient, non-blocking)
+        try:
+            service_playbooks = extract_service_playbooks(
+                conversations,
+                services=shadow_dna.local_procedures,
+                reference_ids=reference_conversation_ids,
+                outcome_results=outcome_results,
+            )
+        except Exception as e:
+            logger.warning("[%s] extract_service_playbooks failed (skipping): %s", job_id[:8], e)
+            service_playbooks = []
+
         # Step 10: Aggregate outcomes (resilient)
         _set_progress(db, job_id, 85, "Agregando desfechos...")
         try:
@@ -256,6 +280,7 @@ def run_analysis(job_id: str, clinic_id: str) -> None:
                 generated_at=datetime.utcnow(),
                 returning_patient_playbook=returning_patient_playbook,
                 clinic_playbook=clinic_playbook,
+                service_playbooks=service_playbooks,
             )
         except Exception as e:
             logger.warning("[%s] build_blueprint failed (using empty fallback): %s", job_id[:8], e)

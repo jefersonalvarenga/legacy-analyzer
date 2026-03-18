@@ -79,6 +79,7 @@ def build_blueprint(
     generated_at: Optional[datetime] = None,
     returning_patient_playbook: Optional[dict] = None,
     clinic_playbook: Optional[dict] = None,
+    service_playbooks: Optional[list] = None,
 ) -> dict:
     """
     Assemble and return the full blueprint as a Python dict.
@@ -176,6 +177,8 @@ def build_blueprint(
         "returning_patient_playbook": returning_patient_playbook or None,
 
         "clinic_playbook": clinic_playbook or None,
+
+        "service_playbooks": service_playbooks or [],
     }
 
     return blueprint

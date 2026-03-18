@@ -136,9 +136,10 @@ async def analyze_clinic(
     background processing, and returns job_id immediately.
 
     Optional body:
-      reference_conversation_ids: list of conversation IDs the admin selected
-        as reference material for playbook generation (Phase 8.1 usage).
-        Currently stored for future use — run_analysis() does not yet consume it.
+      reference_conversation_ids: list of conversation identifiers (phone numbers
+        or source_filename values) the admin selected as reference material.
+        Passed to extract_service_playbooks() to restrict per-service playbook
+        source conversations.
     """
     db = get_db()
 
@@ -173,7 +174,12 @@ async def analyze_clinic(
     logger.info("Analysis job %s created for clinic %s", job_id, clinic_id)
 
     # Step 3: Schedule background processing — fires AFTER response is sent
-    background_tasks.add_task(run_analysis, job_id, clinic_id)
+    background_tasks.add_task(
+        run_analysis,
+        job_id,
+        clinic_id,
+        body.reference_conversation_ids,
+    )
 
     return AnalyzeResponse(
         job_id=job_id,
