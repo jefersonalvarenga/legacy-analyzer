@@ -326,6 +326,8 @@ def configure_lm(
     init_knowledge_modules()
     from analyzer.resources_inference import init_resources_module
     init_resources_module()
+    from analyzer.playbook_inference import init_playbook_module
+    init_playbook_module()
 
     logger.info("DSPy configured with model: %s", model)
 
