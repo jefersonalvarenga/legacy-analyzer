@@ -45,14 +45,13 @@ class Settings(BaseSettings):
 
     # Models
     embedding_model: str = Field("text-embedding-3-small", env="EMBEDDING_MODEL")
-    llm_model: str = Field("gpt-4o-mini", env="LLM_MODEL")
-    llm_model_heavy: str = Field("gpt-4o", env="LLM_MODEL_HEAVY")
-    # Consolidation LM: reviewer model for KnowledgeConsolidator final pass
-    # Set to "anthropic/claude-sonnet-4-6" when ANTHROPIC_API_KEY is set
-    # Falls back to llm_model_heavy if not configured
-    llm_model_consolidator: str = Field(
-        "anthropic/claude-sonnet-4-6", env="LLM_MODEL_CONSOLIDATOR"
-    )
+
+    # Provider selection for the blueprint extractor.
+    # Values: "gemini" (default — free tier viable), "openai", "anthropic", "glm"
+    llm_provider: str = Field("gemini", env="LLM_PROVIDER")
+
+    # Default model per provider — overridden by LLM_MODEL env if set.
+    llm_model: str = Field("gemini/gemini-2.5-flash", env="LLM_MODEL")
 
     # Report output
     reports_output_dir: str = Field("./legacy-analyzer", env="REPORTS_OUTPUT_DIR")
@@ -63,7 +62,7 @@ class Settings(BaseSettings):
     notify_webhook_url: Optional[str] = Field(None, env="NOTIFY_WEBHOOK_URL")
     notify_phone: Optional[str] = Field(None, env="NOTIFY_PHONE")
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 @lru_cache()
