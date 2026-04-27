@@ -14,6 +14,7 @@ Returns outcome label + confidence score (0.0–1.0) + reasoning.
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -129,6 +130,44 @@ def _safe_outcome(value: str) -> str:
     return cleaned if cleaned in VALID_OUTCOMES else "outro"
 
 
+# Patterns that indicate a confirmed appointment in the clinic's last message
+_CONFIRMATION_RE = re.compile(
+    r"confirm|agend|marcad|te espero|até (segunda|terça|quarta|quinta|sexta|sábado|amanhã|logo)|"
+    r"\d{1,2}/\d{1,2}|\d{1,2}h\d{0,2}",
+    re.IGNORECASE,
+)
+
+
+def _python_detect_ghosting(messages) -> Optional[OutcomeResult]:
+    """
+    Deterministic ghosting pre-check — no LLM needed.
+
+    Rule: if the LAST message belongs to the clinic (Aline didn't receive a reply),
+    and it does NOT contain scheduling confirmation language, it's ghosting.
+
+    Returns OutcomeResult if ghosting is detected, None otherwise (defer to LLM).
+    """
+    if not messages:
+        return None
+
+    last_msg = messages[-1]
+
+    if last_msg.sender_type != "clinic":
+        return None  # Patient spoke last — let LLM decide
+
+    # Clinic spoke last: check if it's a booking confirmation
+    if _CONFIRMATION_RE.search(last_msg.content):
+        return None  # Looks like "agendado" — let LLM confirm
+
+    # Clinic spoke last, no confirmation → ghosting
+    return OutcomeResult(
+        outcome="ghosting",
+        confidence_score=0.9,
+        reasoning="Última mensagem é da clínica sem resposta do paciente (ghosting determinístico).",
+        main_objection="",
+    )
+
+
 def detect_outcome(messages, clinic_name: str) -> OutcomeResult:
     """
     Classify the outcome of a single conversation.
@@ -142,6 +181,11 @@ def detect_outcome(messages, clinic_name: str) -> OutcomeResult:
     """
     if not _outcome_module:
         return OutcomeResult(error="OutcomeDetector not initialized. Call init_outcome_module() first.")
+
+    # Fast deterministic check before hitting the LLM
+    ghosting = _python_detect_ghosting(messages)
+    if ghosting:
+        return ghosting
 
     from analyzer.dspy_pipeline import _conversation_to_text, _truncate_conversation
     conv_text = _truncate_conversation(_conversation_to_text(messages))

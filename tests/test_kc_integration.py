@@ -106,3 +106,51 @@ class TestConsolidateKnowledgeOffline:
         assert "implante" in proc_str, (
             f"Implante afirmado pela clínica deve aparecer nos procedures: {result.confirmed_procedures}"
         )
+
+
+class TestPipelineKCIntegration:
+    """Verifica que run_local.py inclui dados do KC no blueprint."""
+
+    def test_blueprint_has_kc_data_from_pipeline(self, tmp_path, synthetic_archive_path):
+        """Blueprint gerado pelo pipeline deve ter confirmed_procedures do KC."""
+        import json
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        output_dir = tmp_path / "kc_pipeline_test"
+        result = subprocess.run(
+            [
+                sys.executable, "run_local.py",
+                "--archive", str(synthetic_archive_path),
+                "--client-slug", "lumina_test",
+                "--client-name", "Lumina Estética Avançada",
+                "--sender-name", "Lumina Estética Avançada",
+                "--output", str(output_dir),
+                "--no-embeddings",
+                "--no-supabase",
+                "--limit", "5",
+            ],
+            cwd=Path(__file__).parent.parent,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert result.returncode == 0, f"Pipeline falhou:\n{result.stderr}"
+
+        blueprints = list((output_dir / "exports").glob("blueprint_*.json"))
+        assert blueprints, "Nenhum blueprint gerado"
+
+        bp = json.loads(blueprints[0].read_text())
+        kb = bp["knowledge_base_mapping"]
+
+        # KC deve ter populado pelo menos um campo com dados reais
+        has_data = (
+            len(kb.get("confirmed_procedures", [])) > 0
+            or len(kb.get("detected_insurances", [])) > 0
+            or len(kb.get("payment_methods", [])) > 0
+        )
+        assert has_data, (
+            f"knowledge_base_mapping está vazio — KC não foi integrado.\n"
+            f"kb={kb}"
+        )

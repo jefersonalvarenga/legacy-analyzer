@@ -143,7 +143,11 @@ def build_report(
     topic_freq: dict[str, int] = {}
     for a in analyses:
         for t in a.topics:
-            topic_freq[t] = topic_freq.get(t, 0) + 1
+            if isinstance(t, dict):
+                t = t.get("topic") or t.get("name") or next(iter(t.values()), "")
+            t = str(t).strip().lower()
+            if t:
+                topic_freq[t] = topic_freq.get(t, 0) + 1
     top_topics = sorted(topic_freq.items(), key=lambda x: x[1], reverse=True)[:10]
 
     # Dynamic insight: confirmação vs agendamento topic ranking
