@@ -316,8 +316,11 @@ def run_analysis(
                 e,
             )
 
-        # Step 16: Mark job done
+        # Step 16: Mark job done + flip clinic onboarding to sync_complete
         _update_job(db, job_id, status="done", progress=100, current_step="Concluido")
+        db.table("sf_clinics").update({
+            "onboarding_status": "sync_complete",
+        }).eq("id", clinic_id).execute()
         logger.info("[%s] Pipeline complete for clinic %s", job_id[:8], clinic_id)
 
     except Exception as exc:
