@@ -9,6 +9,10 @@ env/
 # Output directories
 legacy-analyzer/
 reports/
+output/
+
+# Skill runtime artifacts
+docs/superpowers/
 
 # Python
 __pycache__/
