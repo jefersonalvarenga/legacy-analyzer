@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Optional
 
 import dspy
 from pydantic import BaseModel, Field
@@ -74,9 +74,9 @@ class G1Identidade(BaseModel):
     professionals: list[Professional] = Field(default_factory=list)
     services_catalog: list[ServiceItem] = Field(default_factory=list)
     service_pricing: list[ServicePrice] = Field(default_factory=list)
-    payment_methods: list[
-        Literal["pix", "credito", "debito", "dinheiro", "boleto", "transferencia", "wellhub_gympass"]
-    ] = Field(default_factory=list)
+    # Sugestões: pix | credito | debito | dinheiro | boleto | transferencia | wellhub_gympass.
+    # Modelo pode retornar qualquer string — consumer normaliza.
+    payment_methods: list[str] = Field(default_factory=list)
     installments_policy: InstallmentsPolicy = Field(default_factory=InstallmentsPolicy)
     discounts_policy: DiscountsPolicy = Field(default_factory=DiscountsPolicy)
 
@@ -84,18 +84,23 @@ class G1Identidade(BaseModel):
 # ----- G2 — Tom e voz -----
 
 class UsoEmoji(BaseModel):
-    frequencia: Literal["alta", "media", "baixa", "zero"]
+    # Sugestões: alta | media | baixa | zero
+    frequencia: str = "media"
     tipos_comuns: list[str] = Field(default_factory=list)
 
 
 class G2TomVoz(BaseModel):
-    tom_voz: Literal["formal_clinico", "cordial_amigavel", "marketeiro_alegre", "informal_proximo"]
-    nivel_formalidade: Literal["voce", "senhor_senhora", "mix"]
-    uso_emoji: UsoEmoji
-    comprimento_msg_tipico: Literal["curto_objetivo", "medio_explicativo", "longo_caloroso"]
-    quebra_de_msg: Literal["uma_msg_longa", "varias_msgs_curtas", "mix"]
-    saudacao_inicial: list[str] = Field(default_factory=list, min_length=1, max_length=8)
-    despedida_padrao: list[str] = Field(default_factory=list, min_length=1, max_length=8)
+    # tom_voz sugerido: formal_clinico | cordial_amigavel | marketeiro_alegre | informal_proximo
+    tom_voz: str = "cordial_amigavel"
+    # nivel_formalidade sugerido: voce | senhor_senhora | mix
+    nivel_formalidade: str = "voce"
+    uso_emoji: UsoEmoji = Field(default_factory=UsoEmoji)
+    # comprimento_msg_tipico sugerido: curto_objetivo | medio_explicativo | longo_caloroso
+    comprimento_msg_tipico: str = "medio_explicativo"
+    # quebra_de_msg sugerido: uma_msg_longa | varias_msgs_curtas | mix
+    quebra_de_msg: str = "mix"
+    saudacao_inicial: list[str] = Field(default_factory=list)
+    despedida_padrao: list[str] = Field(default_factory=list)
 
 
 # ----- G3 — Comportamento de venda -----
@@ -113,20 +118,27 @@ class Objecao(BaseModel):
 
 
 class ContraindicacaoPolicy(BaseModel):
-    deteccao: Literal["triagem_estruturada", "triagem_leve", "so_avaliacao", "nao_aborda"]
-    acao: Literal["escala_avaliacao", "orienta_e_marca", "marca_direto", "recusa_atender"]
+    # deteccao sugerido: triagem_estruturada | triagem_leve | so_avaliacao | nao_aborda
+    deteccao: str = "nao_aborda"
+    # acao sugerido: escala_avaliacao | orienta_e_marca | marca_direto | recusa_atender
+    acao: str = "marca_direto"
 
 
 class G3Venda(BaseModel):
-    politica_preco: Literal["aberto", "faixa", "avaliacao", "sinal"]
-    momento_revela_preco: Literal["imediato", "apos_qualificacao", "apos_anamnese", "so_avaliacao"]
-    educacao_tecnica: Literal["explica_no_zap", "mix", "guarda_pra_avaliacao"]
+    # politica_preco sugerido: aberto | faixa | avaliacao | sinal | mix
+    politica_preco: str = "mix"
+    # momento_revela_preco sugerido: imediato | apos_qualificacao | apos_anamnese | so_avaliacao
+    momento_revela_preco: str = "apos_qualificacao"
+    # educacao_tecnica sugerido: explica_no_zap | mix | guarda_pra_avaliacao
+    educacao_tecnica: str = "mix"
     qualificacao_tipica: list[str] = Field(default_factory=list)
-    prova_social_uso: Literal["proativa_antes_depois", "sob_demanda", "nao_usa"]
-    mencao_profissional: Literal["nomeia_dermato", "nomeia_biomedica", "nao_nomeia", "por_servico"]
+    # prova_social_uso sugerido: proativa_antes_depois | sob_demanda | nao_usa
+    prova_social_uso: str = "sob_demanda"
+    # mencao_profissional sugerido: nomeia_dermato | nomeia_biomedica | nao_nomeia | por_servico
+    mencao_profissional: str = "nao_nomeia"
     politica_sinal: PoliticaSinal = Field(default_factory=PoliticaSinal)
     objecoes_recorrentes: list[Objecao] = Field(default_factory=list)
-    contraindicacao_policy: ContraindicacaoPolicy
+    contraindicacao_policy: ContraindicacaoPolicy = Field(default_factory=ContraindicacaoPolicy)
 
 
 # ----- G4 — Fluxo conversacional -----
@@ -138,13 +150,10 @@ class FollowUpApsSilencio(BaseModel):
 
 
 class G4Fluxo(BaseModel):
-    fluxo_padrao_atendimento: list[
-        Literal[
-            "greeting", "qualifica_area", "qualifica_objetivo", "educa", "preco",
-            "agenda", "sinal", "confirmacao", "follow_up", "escala_humano",
-        ]
-    ] = Field(default_factory=list)
-    como_confirma_agendamento: str
+    # Sugestões: greeting | qualifica_area | qualifica_objetivo | educa | preco | prova_social |
+    # agenda | sinal | confirmacao | follow_up | escala_humano | anamnese.
+    fluxo_padrao_atendimento: list[str] = Field(default_factory=list)
+    como_confirma_agendamento: str = ""
     follow_up_apos_silencio: FollowUpApsSilencio = Field(default_factory=FollowUpApsSilencio)
 
 
@@ -189,33 +198,79 @@ class G6InteligenciaComercial(BaseModel):
 
 class Blueprint(BaseModel):
     g1_identidade: G1Identidade
-    g2_tom_voz: G2TomVoz
-    g3_venda: G3Venda
-    g4_fluxo: G4Fluxo
-    g5_conhecimento: G5Conhecimento
-    g6_inteligencia_comercial: G6InteligenciaComercial
+    g2_tom_voz: G2TomVoz = Field(default_factory=G2TomVoz)
+    g3_venda: G3Venda = Field(default_factory=G3Venda)
+    g4_fluxo: G4Fluxo = Field(default_factory=G4Fluxo)
+    g5_conhecimento: G5Conhecimento = Field(default_factory=G5Conhecimento)
+    g6_inteligencia_comercial: G6InteligenciaComercial = Field(
+        default_factory=G6InteligenciaComercial
+    )
 
 
 # ----- DSPy signature -----
 
 class BlueprintSignature(dspy.Signature):
     """
-    Você recebe TODAS as conversas WhatsApp de uma clínica de estética e extrai
-    o DNA da clínica em JSON estruturado.
+    Você recebe TODAS as conversas WhatsApp entre pacientes e atendentes de uma
+    clínica de estética. Sua tarefa: extrair o DNA da clínica para que um
+    assistente de IA replique o padrão de atendimento sem soar genérico.
 
-    Princípios:
-    - Identidade (G1) é fato observável: copie o que está nas mensagens, não invente.
-      Campos com null quando a conversa não menciona.
-    - Tom/voz (G2): atendente fala assim em geral? Use exemplos REAIS de saudação e despedida
-      extraídos das mensagens (não invente formato).
-    - Venda (G3): observe o COMO da clínica vender — política de preço (aberto, faixa, avaliação),
-      momento de revelar, prova social, sinal, objeções recorrentes e respostas dadas.
-    - Fluxo (G4): a sequência mais comum de etapas que a atendente segue.
-    - Conhecimento (G5): perguntas frequentes com respostas REAIS da clínica, procedimentos
-      explicados como a clínica explica, gatilhos que escalam pra humano.
-    - Comercial (G6): origem do paciente quando dá pra inferir das mensagens iniciais.
+    OBRIGATÓRIO: o output JSON deve conter os 6 grupos preenchidos
+    (g1_identidade, g2_tom_voz, g3_venda, g4_fluxo, g5_conhecimento,
+    g6_inteligencia_comercial). NUNCA omita um grupo. Quando a evidência for
+    fraca, escolha o valor mais próximo nas sugestões e siga em frente.
 
-    Não opine sobre qualidade. Não dê notas. Apenas catalogue.
+    Como preencher cada grupo:
+
+    G1 — IDENTIDADE (fatos): clinic_name, endereço, bairro, business_hours por
+    dia, professionals com nome+título+especialidades, services_catalog com
+    nome de cada serviço/procedimento mencionado, service_pricing com valores
+    citados (texto livre tipo "R$ 450" ou "a partir de R$ 1.200"), payment_methods,
+    installments_policy, discounts_policy. Use null se não citado, mas tente
+    preencher tudo o que aparecer ao menos 1x.
+
+    G2 — TOM/VOZ: como a atendente fala?
+      tom_voz: "marketeiro_alegre" se há emojis em quase toda msg da
+      atendente + frases curtas em rajada + "amor"/"linda"/"corre".
+      "cordial_amigavel" se 0–1 emoji ocasional, frases médias, profissional
+      mas calorosa. "formal_clinico" se ZERO emoji, "você"/"a senhora",
+      menciona Dra. proativa, frases completas. "informal_proximo" pra
+      casos sem emoji mas muito coloquial.
+      saudacao_inicial e despedida_padrao: 3 a 8 exemplos REAIS extraídos
+      das mensagens (não invente — copie literal). Não use mais de 10.
+
+    G3 — VENDA: como vende?
+      politica_preco: "aberto" se dá valor exato logo. "sinal" se dá valor +
+      pede sinal. "faixa" se "a partir de R$X" / "entre X e Y". "avaliacao"
+      se "o valor a gente passa na consulta". "mix" se varia entre serviços.
+      educacao_tecnica: "explica_no_zap" se atendente explica procedimento
+      no chat. "guarda_pra_avaliacao" se sempre adia. "mix" se varia.
+      objecoes_recorrentes: top 3-5 objeções (ex: "tá caro", "vou pensar")
+      com a resposta REAL da clínica.
+      contraindicacao_policy: como a clínica trata contraindicações
+      (gestante, isotretinoína, etc).
+
+    G4 — FLUXO: ordem típica de etapas. Ex: greeting → qualifica_area →
+    educa → preco → agenda → sinal → confirmacao. Use as etapas que
+    realmente aparecem.
+    como_confirma_agendamento: copie um exemplo real de mensagem de
+    confirmação da clínica.
+
+    G5 — CONHECIMENTO: faq_extraido (top 5-10 perguntas frequentes com
+    resposta REAL da clínica), procedimentos_explicados (como a clínica
+    explica cada procedimento), casos_de_escalation (gatilhos que sempre
+    vão pra humano).
+
+    G6 — COMERCIAL: origem_paciente_distribuicao em % (some 100). Olhe
+    as primeiras mensagens — paciente menciona "vi no instagram", "me
+    indicaram", "vi anúncio". Estime distribuição.
+
+    Princípios gerais:
+    - Não opine sobre qualidade do atendimento.
+    - Use exemplos REAIS quando o campo pede ("saudacao_inicial",
+      "objecoes_recorrentes", "como_confirma_agendamento", "faq_extraido"):
+      copie literal das mensagens, não invente.
+    - Quando incerto, prefira a sugestão mais conservadora a deixar vazio.
     """
 
     clinic_name: str = dspy.InputField(desc="Nome da clínica como referência.")
@@ -225,8 +280,8 @@ class BlueprintSignature(dspy.Signature):
     )
 
     blueprint: Blueprint = dspy.OutputField(
-        desc="JSON estruturado com 6 grupos: g1_identidade, g2_tom_voz, g3_venda, g4_fluxo, "
-        "g5_conhecimento, g6_inteligencia_comercial. Siga os enums e tipos exatos do schema."
+        desc="Blueprint completo com OS 6 GRUPOS PREENCHIDOS: g1_identidade, "
+        "g2_tom_voz, g3_venda, g4_fluxo, g5_conhecimento, g6_inteligencia_comercial."
     )
 
 

@@ -163,7 +163,7 @@
       "properties": {
         "politica_preco": {
           "type": "string",
-          "enum": ["aberto", "faixa", "avaliacao", "sinal"]
+          "enum": ["aberto", "faixa", "avaliacao", "sinal", "mix"]
         },
         "momento_revela_preco": {
           "type": "string",
