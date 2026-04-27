@@ -93,8 +93,18 @@ Progress: [█░░░░░░░░░] 11%
 
 None yet.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260318-nsj | Migration la_services.requires_evaluation + reference_conversation_ids no endpoint | 2026-03-18 | 7816914 | [260318-nsj](./quick/260318-nsj-migration-la-services-requires-evaluatio/) |
+| 260318-nsl-cp | clinic_profile inference: operating_hours + neighborhood + source_signals | 2026-03-18 | bcee370 | [260318-nsl-cp](./quick/260318-nsl-clinic-profile-inference-operating-hours/) |
+| 260318-nsl-rp | returning_patient_playbook: inferir playbook de paciente recorrente por intencao | 2026-03-18 | 195288d | [260318-nsl-rp](./quick/260318-nsl-returning-patient-playbook-inferir-playb/) |
+| 260318-nsl-fp | clinic_playbook forense: ClinicPlaybookSignature com reasoning e phases livres | 2026-03-18 | 69bbb80 | [260318-nsl-fp](./quick/260318-nsl-clinic-playbook-forense-clinicplaybooksi/) |
+| 260318-nwq | service_playbooks por servico: ClinicServicePlaybookSignature + extrator de elements | 2026-03-18 | 476f118 | [260318-nwq](./quick/260318-nwq-service-playbooks-por-servico-clinicserv/) |
+
 ## Session Continuity
 
-Last session: 2026-03-18T01:28:40.558Z
-Stopped at: Completed 09-02-PLAN.md — Pipeline Integration GREEN
+Last session: 2026-03-18T20:12:00.000Z
+Stopped at: Completed Phase 8.1 quick tasks (5 tasks) — clinic_playbook forense, service_playbooks, returning_patient_playbook, clinic_profile, migration
 Resume file: None
