@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # Anthropic (used by KnowledgeConsolidator as final reviewer)
     anthropic_api_key: Optional[str] = Field(None, env="ANTHROPIC_API_KEY")
 
+    # Google Gemini (optional — used by generate_synthetic_archive.py)
+    google_api_key: Optional[str] = Field(None, env="GOOGLE_API_KEY")
+
+    # Groq (optional — free tier, used for per-conversation analysis at scale)
+    groq_api_key: Optional[str] = Field(None, env="GROQ_API_KEY")
+
     # Models
     embedding_model: str = Field("text-embedding-3-small", env="EMBEDDING_MODEL")
     llm_model: str = Field("gpt-4o-mini", env="LLM_MODEL")
