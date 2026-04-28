@@ -25,6 +25,7 @@ from analyzer.blueprint_v2 import (
     extract_blueprint,
     to_storage_dict,
 )
+from analyzer.sf_sync import sync_blueprint_to_sf
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +145,19 @@ def run_analysis(
             storage_dict=storage_dict,
         )
 
-        # Mark done. LA não toca em sf_clinics — quem orquestra estados de
-        # onboarding é o n8n (via legacy-analyzer-trigger workflow).
+        # Auto-migra blueprint → sf_* (perfil, profissionais, especialidades,
+        # serviços, mapeamento, tom da assistente). Marca cada domínio como
+        # 'auto' em sf_clinics.setup_review — usuário aprova depois.
+        _set_progress(db, job_id, 95, "Atualizando dados da clínica...")
+        try:
+            sync_blueprint_to_sf(db, clinic_id, blueprint)
+        except Exception as e:
+            # Sync falhou. Mantém blueprint salvo + marca job error.
+            logger.error("[%s] sf_sync failed: %s", job_id[:8], e, exc_info=True)
+            raise
+
+        # Mark done. LA não toca em sf_clinics.onboarding_status — quem
+        # orquestra é o n8n (via legacy-analyzer-trigger workflow).
         _update_job(db, job_id, status="done", progress=100, current_step="Concluído")
         logger.info("[%s] Pipeline complete for clinic %s", job_id[:8], clinic_id)
 

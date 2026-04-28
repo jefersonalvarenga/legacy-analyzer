@@ -34,6 +34,9 @@ class ServiceItem(BaseModel):
     nome: str
     categoria: Optional[str] = None
     duracao_min: Optional[int] = None
+    # Lista de profissionais que executam esse serviço (nome livre — usar
+    # o mesmo nome que aparece em professionals[].nome quando possível).
+    performed_by: list[str] = Field(default_factory=list)
     contraindicacoes_mencionadas: list[str] = Field(default_factory=list)
 
 
@@ -224,10 +227,12 @@ class BlueprintSignature(dspy.Signature):
 
     G1 — IDENTIDADE (fatos): clinic_name, endereço, bairro, business_hours por
     dia, professionals com nome+título+especialidades, services_catalog com
-    nome de cada serviço/procedimento mencionado, service_pricing com valores
-    citados (texto livre tipo "R$ 450" ou "a partir de R$ 1.200"), payment_methods,
-    installments_policy, discounts_policy. Use null se não citado, mas tente
-    preencher tudo o que aparecer ao menos 1x.
+    nome de cada serviço/procedimento mencionado E performed_by (lista de
+    profissionais que executam — usar mesmos nomes de professionals[].nome
+    quando a conversa diz "a Dra. Ana faz tal procedimento"), service_pricing
+    com valores citados (texto livre tipo "R$ 450" ou "a partir de R$ 1.200"),
+    payment_methods, installments_policy, discounts_policy. Use null se não
+    citado, mas tente preencher tudo o que aparecer ao menos 1x.
 
     G2 — TOM/VOZ: como a atendente fala?
       tom_voz: "marketeiro_alegre" se há emojis em quase toda msg da
