@@ -144,11 +144,9 @@ def run_analysis(
             storage_dict=storage_dict,
         )
 
-        # Mark done + flip clinic onboarding
+        # Mark done. LA não toca em sf_clinics — quem orquestra estados de
+        # onboarding é o n8n (via legacy-analyzer-trigger workflow).
         _update_job(db, job_id, status="done", progress=100, current_step="Concluído")
-        db.table("sf_clinics").update({
-            "onboarding_status": "sync_complete",
-        }).eq("id", clinic_id).execute()
         logger.info("[%s] Pipeline complete for clinic %s", job_id[:8], clinic_id)
 
     except Exception as exc:
