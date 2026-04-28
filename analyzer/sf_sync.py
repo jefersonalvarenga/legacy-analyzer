@@ -53,6 +53,56 @@ def _price_to_numeric(text: Optional[str]) -> Optional[float]:
         return None
 
 
+PT_TO_EN_DAY = {
+    "seg": "mon", "ter": "tue", "qua": "wed", "qui": "thu",
+    "sex": "fri", "sab": "sat", "dom": "sun",
+}
+
+
+def _parse_time_range(text: str) -> Optional[tuple[str, str]]:
+    """'9h-18h' / '9:00-18:00' / '9h às 18h' → ('09:00','18:00'). None se não der."""
+    if not text:
+        return None
+    m = re.search(r"(\d{1,2})[h:]?(\d{0,2}).*?(\d{1,2})[h:]?(\d{0,2})", text)
+    if not m:
+        return None
+    h1, m1, h2, m2 = m.groups()
+    return (
+        f"{int(h1):02d}:{(m1 or '00').zfill(2)[:2]}",
+        f"{int(h2):02d}:{(m2 or '00').zfill(2)[:2]}",
+    )
+
+
+def _to_week_schedule(hours: dict) -> dict:
+    """
+    Converte business_hours do blueprint (PT-BR keys, free text) pro shape canônico
+    do frontend (EN keys, {enabled, shifts:[{open,close}]}).
+
+    Shape de entrada: {seg:'9h-18h', ter:None, ...}
+    Shape de saída:   {mon:{enabled:True, shifts:[{open:'09:00',close:'18:00'}]}, sun:{enabled:False, shifts:[]}, ...}
+    """
+    out: dict = {
+        "sun": {"enabled": False, "shifts": []},
+        "mon": {"enabled": False, "shifts": []},
+        "tue": {"enabled": False, "shifts": []},
+        "wed": {"enabled": False, "shifts": []},
+        "thu": {"enabled": False, "shifts": []},
+        "fri": {"enabled": False, "shifts": []},
+        "sat": {"enabled": False, "shifts": []},
+    }
+    if not isinstance(hours, dict):
+        return out
+    for pt_key, en_key in PT_TO_EN_DAY.items():
+        text = hours.get(pt_key)
+        if not text:
+            continue
+        rng = _parse_time_range(text)
+        if not rng:
+            continue
+        out[en_key] = {"enabled": True, "shifts": [{"open": rng[0], "close": rng[1]}]}
+    return out
+
+
 def _hours_to_open_close(hours: dict) -> tuple[Optional[str], Optional[str]]:
     """Converts {seg: '9h-18h', ...} → ('09:00', '18:00') taking the most common.
 
@@ -95,7 +145,7 @@ def _sync_clinic_profile(db, clinic_id: str, bp: Blueprint) -> None:
     if close_time:
         update_payload["close_time"] = close_time
     if g1.business_hours:
-        update_payload["schedule"] = g1.business_hours.model_dump()
+        update_payload["schedule"] = _to_week_schedule(g1.business_hours.model_dump())
 
     # Payment instructions consolidated (text livre — admin edita)
     payment_lines = []
