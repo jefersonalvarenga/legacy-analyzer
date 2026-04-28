@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Optional
 
 import dspy
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from analyzer.parser import Conversation
 
@@ -29,6 +29,15 @@ class Professional(BaseModel):
     titulo: Optional[str] = None
     especialidades: list[str] = Field(default_factory=list)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, value):
+        if isinstance(value, str):
+            return {"nome": value}
+        if isinstance(value, list):
+            return {"nome": value[0] if value else ""}
+        return value
+
 
 class ServiceItem(BaseModel):
     nome: str
@@ -39,11 +48,30 @@ class ServiceItem(BaseModel):
     performed_by: list[str] = Field(default_factory=list)
     contraindicacoes_mencionadas: list[str] = Field(default_factory=list)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, value):
+        # Tolera Gemini retornando string solta ou lista no lugar do objeto.
+        if isinstance(value, str):
+            return {"nome": value}
+        if isinstance(value, list):
+            return {"nome": value[0] if value else ""}
+        return value
+
 
 class ServicePrice(BaseModel):
     servico: str
     valor_or_faixa: str
     condicao: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, value):
+        if isinstance(value, str):
+            return {"servico": value, "valor_or_faixa": ""}
+        if isinstance(value, list):
+            return {"servico": value[0] if value else "", "valor_or_faixa": ""}
+        return value
 
 
 class BusinessHours(BaseModel):
@@ -117,7 +145,16 @@ class PoliticaSinal(BaseModel):
 
 class Objecao(BaseModel):
     objecao: str
-    resposta_padrao_da_clinica: str
+    resposta_padrao_da_clinica: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, value):
+        if isinstance(value, str):
+            return {"objecao": value, "resposta_padrao_da_clinica": ""}
+        if isinstance(value, list):
+            return {"objecao": value[0] if value else "", "resposta_padrao_da_clinica": ""}
+        return value
 
 
 class ContraindicacaoPolicy(BaseModel):
@@ -164,14 +201,32 @@ class G4Fluxo(BaseModel):
 
 class FaqItem(BaseModel):
     pergunta_padrao: str
-    resposta_padrao_da_clinica: str
+    resposta_padrao_da_clinica: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, value):
+        if isinstance(value, str):
+            return {"pergunta_padrao": value, "resposta_padrao_da_clinica": ""}
+        if isinstance(value, list):
+            return {"pergunta_padrao": value[0] if value else "", "resposta_padrao_da_clinica": ""}
+        return value
 
 
 class ProcedimentoExplicado(BaseModel):
     procedimento: str
-    explicacao: str
+    explicacao: str = ""
     beneficios_destacados: list[str] = Field(default_factory=list)
     contraindicacoes_mencionadas: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, value):
+        if isinstance(value, str):
+            return {"procedimento": value, "explicacao": ""}
+        if isinstance(value, list):
+            return {"procedimento": value[0] if value else "", "explicacao": ""}
+        return value
 
 
 class G5Conhecimento(BaseModel):
