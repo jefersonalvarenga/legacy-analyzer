@@ -25,6 +25,7 @@ from analyzer.blueprint_v2 import (
     extract_blueprint,
     to_storage_dict,
 )
+from analyzer.chunker import extract_blueprint_chunked
 from analyzer.sf_sync import sync_blueprint_to_sf
 
 logger = logging.getLogger(__name__)
@@ -122,9 +123,31 @@ def run_analysis(
             job_id[:8], len(conversations), message_count,
         )
 
-        # Fase 2 — Extract DNA (1 call LLM)
+        # Fase 2 — Extract DNA (1 ou N calls LLM, conforme volume)
         _set_progress(db, job_id, 50, "Analisando conversas com IA...")
-        blueprint = extract_blueprint(conversations, clinic_name)
+
+        def _on_chunk_progress(done: int, total: int, eta: int) -> None:
+            # done=0 antes do primeiro chunk; total fixo desde a 1ª chamada.
+            step = (
+                f"Analisando conversas ({done}/{total})"
+                if total > 1
+                else "Analisando conversas com IA..."
+            )
+            payload = {
+                "current_step": step,
+                "chunks_total": total,
+                "chunks_done": done,
+                "eta_seconds": eta,
+            }
+            # progress numérico: 50 → 90 ao longo dos chunks.
+            payload["progress"] = 50 + int(40 * (done / total)) if total else 50
+            _update_job(db, job_id, **payload)
+
+        blueprint = extract_blueprint_chunked(
+            conversations,
+            clinic_name,
+            on_progress=_on_chunk_progress,
+        )
 
         # Fase 3 — Persist
         _set_progress(db, job_id, 90, "Salvando blueprint...")
