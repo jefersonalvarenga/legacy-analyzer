@@ -158,7 +158,7 @@ def _sync_professionals(db, clinic_id: str, bp: Blueprint) -> dict[str, str]:
             "sofia_enabled": True,
             "offers_specialty": bool(prof.especialidades),
         }
-        result = db.table("sf_resources").insert(row).select("id").execute()
+        result = db.table("sf_resources").insert(row).execute()
         if result.data:
             name_to_id[prof.nome.strip().lower()] = result.data[0]["id"]
     return name_to_id
@@ -179,7 +179,6 @@ def _sync_specialties(db, clinic_id: str, bp: Blueprint) -> dict[str, str]:
             result = (
                 db.table("sf_specialties")
                 .insert({"clinic_id": clinic_id, "name": spec.strip()})
-                .select("id")
                 .execute()
             )
             if result.data:
@@ -218,7 +217,7 @@ def _sync_services(db, clinic_id: str, bp: Blueprint, prof_name_to_id: dict[str,
             "requires_evaluation": False,
             "default_flow": "agendamento",
         }
-        result = db.table("sf_clinic_services").insert(row).select("id").execute()
+        result = db.table("sf_clinic_services").insert(row).execute()
         if not result.data:
             continue
         service_id = result.data[0]["id"]
