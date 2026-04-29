@@ -124,24 +124,34 @@ def run_analysis(
         )
 
         # Fase 2 — Extract DNA (1 ou N calls LLM, conforme volume)
-        _set_progress(db, job_id, 50, "Analisando conversas com IA...")
+        # Estimativa fixa: 30s por chunk. Grava eta_finished_at (absoluto) uma
+        # única vez aqui — frontend faz a contagem regressiva derivada do clock.
+        from datetime import timedelta
+        from analyzer.chunker import DEFAULT_MAX_CONVS_PER_CHUNK
+        chunks_total = max(1, (len(conversations) + DEFAULT_MAX_CONVS_PER_CHUNK - 1) // DEFAULT_MAX_CONVS_PER_CHUNK)
+        SEC_PER_CHUNK = 30
+        eta_finished_at = (datetime.utcnow() + timedelta(seconds=chunks_total * SEC_PER_CHUNK)).isoformat() + "Z"
+        _update_job(
+            db, job_id,
+            progress=50,
+            current_step="Analisando conversas com IA...",
+            chunks_total=chunks_total,
+            chunks_done=0,
+            eta_finished_at=eta_finished_at,
+        )
 
-        def _on_chunk_progress(done: int, total: int, eta: int) -> None:
-            # done=0 antes do primeiro chunk; total fixo desde a 1ª chamada.
+        def _on_chunk_progress(done: int, total: int, _eta: int) -> None:
             step = (
                 f"Analisando conversas ({done}/{total})"
                 if total > 1
                 else "Analisando conversas com IA..."
             )
-            payload = {
-                "current_step": step,
-                "chunks_total": total,
-                "chunks_done": done,
-                "eta_seconds": eta,
-            }
-            # progress numérico: 50 → 90 ao longo dos chunks.
-            payload["progress"] = 50 + int(40 * (done / total)) if total else 50
-            _update_job(db, job_id, **payload)
+            _update_job(
+                db, job_id,
+                current_step=step,
+                chunks_done=done,
+                progress=50 + int(40 * (done / total)) if total else 50,
+            )
 
         blueprint = extract_blueprint_chunked(
             conversations,
