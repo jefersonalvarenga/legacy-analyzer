@@ -179,8 +179,8 @@ def run_analysis(
         )
 
         # Auto-migra blueprint → sf_* (perfil, profissionais, especialidades,
-        # serviços, mapeamento, tom da assistente). Marca cada domínio como
-        # 'auto' em sf_clinics.setup_review — usuário aprova depois.
+        # serviços, mapeamento, tom da assistente). Aprovação por domínio é
+        # feita depois pelo usuário via UI (sf_clinics.onboarding_review).
         _set_progress(db, job_id, 95, "Atualizando dados da clínica...")
         try:
             sync_blueprint_to_sf(db, clinic_id, blueprint)

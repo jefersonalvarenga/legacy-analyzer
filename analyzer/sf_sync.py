@@ -11,8 +11,9 @@ Domínios sincronizados:
   G2..G5 → sf_assistant_profile
 
 Não toca em sf_clinics.onboarding_status (orquestração é do n8n).
-Marca cada domínio como 'auto' em sf_clinics.setup_review pra UI saber
-que aquele dado precisa de aprovação humana.
+Não escreve em sf_clinics.onboarding_review — default da coluna já é
+'pending' em todos os domínios; aprovação é feita pelo usuário via UI
+(POST /api/admin/confirm-step).
 """
 
 from __future__ import annotations
@@ -170,16 +171,6 @@ def _sync_clinic_profile(db, clinic_id: str, bp: Blueprint) -> None:
             payment_lines.append(f"Pacote sessões: {d.pacote_sessoes}")
     if payment_lines:
         update_payload["payment_instructions"] = "\n".join(payment_lines)
-
-    # Marca todos os domínios extraídos como 'auto' (precisam aprovação).
-    update_payload["setup_review"] = {
-        "profile": "auto",
-        "business_hours": "auto",
-        "payment": "auto",
-        "professionals": "auto",
-        "services": "auto",
-        "assistant_tone": "auto",
-    }
 
     if update_payload:
         db.table("sf_clinics").update(update_payload).eq("id", clinic_id).execute()
