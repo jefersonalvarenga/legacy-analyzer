@@ -1,91 +1,51 @@
 """
 analysis_runner.py
 ------------------
-Background processing entry point for POST /analyze/{clinic_id}.
+Pipeline V2 do Legacy Analyzer — 3 fases:
+  1. Ingest   — lê todas as Messages da clínica via evolution_ingestor
+  2. Extract  — 1 call DSPy (Gemini 2.5 Flash default) → Blueprint completo
+  3. Persist  — grava em la_blueprints, popula la_resources/la_services derivados,
+                marca job done, flipa sf_clinics.onboarding_status='sync_complete'
 
-Phase 9: Full end-to-end pipeline that sequences every component built in
-Phases 6-8. Called via FastAPI BackgroundTasks.add_task(run_analysis, job_id, clinic_id).
-
-Pipeline steps:
-  Step 1  (5%):  Mark job status="processing"
-  Step 2  (10%): Resolve clinic name from sf_clinics
-  Step 3  (15%): _ensure_lm_configured() — lazy DSPy init
-  Step 4  (20%): ingest_from_evolution() → conversations
-  Step 5  (25%): Guard — 0 conversations → fail job fast
-  Step 6  (30%): compute_metrics() per conversation → metrics_list
-  Step 7  (35-70%): analyze_conversation() per conversation → analyses
-  Step 8  (75%): detect_outcome() per conversation → outcome_results
-  Step 9  (80%): extract_shadow_dna() → shadow_dna
-  Step 10 (85%): aggregate_outcomes() → outcome_summary
-  Step 11 (87%): compute_financial_kpis() → financial_kpis
-  Step 12 (90%): aggregate_metrics() → agg_metrics
-  Step 13 (92%): build_blueprint() → blueprint_dict
-  Step 14 (95%): INSERT to la_blueprints with clinic_id
-  Step 15 (97%): infer_and_persist_resources() — non-blocking
-  Step 16 (100%): Mark job status="done"
-
-Resilience contract:
-  - Steps 6-13 are individually wrapped in try/except. Individual analysis
-    failures produce degraded (empty) results but do NOT abort the pipeline.
-  - Step 15 (resource inference) failure is explicitly non-blocking.
-  - Any unhandled exception from steps 1-14 marks the job as "error".
+Tudo o que era pipeline antigo (sentiment/quality/outcomes/KPIs/shadow DNA)
+foi removido — git history em main protege.
 """
+
+from __future__ import annotations
+
 import logging
 from datetime import datetime
+from typing import Optional
 
 from db import get_db
 from analyzer.evolution_ingestor import ingest_from_evolution
-from analyzer.metrics import compute_metrics, aggregate_metrics, AggregatedMetrics
-from analyzer.dspy_pipeline import analyze_conversation, configure_lm, SemanticAnalysis
-from analyzer.outcome_detection import detect_outcome, aggregate_outcomes, OutcomeSummary
-from analyzer.shadow_dna import extract_shadow_dna, extract_returning_patient_playbook, ShadowDNA
-from analyzer.financial_kpis import compute_financial_kpis, FinancialKPIs
-from analyzer.blueprint import build_blueprint
-from analyzer.resources_inference import infer_and_persist_resources
-from analyzer.playbook_inference import extract_clinic_playbook, extract_service_playbooks
+from analyzer.dspy_pipeline import configure_lm
+from analyzer.blueprint_v2 import (
+    Blueprint,
+    extract_blueprint,
+    to_storage_dict,
+)
+from analyzer.chunker import extract_blueprint_chunked
+from analyzer.sf_sync import sync_blueprint_to_sf
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Lazy DSPy initialization — called once per process before any DSPy step
-# ---------------------------------------------------------------------------
 
-_lm_initialized: bool = False
+_lm_initialized = False
 
 
-def _ensure_lm_configured() -> None:
-    """
-    Initialize DSPy language models once per process.
-
-    Skips initialization if:
-    - already initialized by this function (_lm_initialized flag), OR
-    - dspy.settings.lm is already configured (e.g. by test fixtures or worker startup)
-
-    This prevents overwriting an LM configured by conftest.py or run_worker().
-    """
+def _ensure_lm_configured() -> tuple[str, str]:
+    """Idempotent — configures DSPy once per process. Returns (provider, model)."""
     global _lm_initialized
-    if _lm_initialized:
-        return
     import dspy as _dspy
-    if _dspy.settings.lm is not None:
-        # LM already configured externally (test fixture, worker startup, etc.)
-        _lm_initialized = True
-        return
-    from config import get_settings
-    s = get_settings()
-    configure_lm(
-        openai_api_key=s.llm_api_key,
-        model=s.llm_model,
-        base_url=s.openai_base_url,
-        anthropic_api_key=s.anthropic_api_key,
-        consolidator_model=s.llm_model_consolidator,
-    )
+    if _lm_initialized and _dspy.settings.lm is not None:
+        # already configured; recover provider/model from settings if possible
+        lm = _dspy.settings.lm
+        return ("unknown", getattr(lm, "model", "unknown"))
+    provider, model = configure_lm()
     _lm_initialized = True
+    return provider, model
 
-
-# ---------------------------------------------------------------------------
-# DB helpers — pass db explicitly so tests can inject a mock
-# ---------------------------------------------------------------------------
 
 def _update_job(db, job_id: str, **kwargs) -> None:
     db.table("la_analysis_jobs").update({
@@ -99,44 +59,40 @@ def _set_progress(db, job_id: str, progress: int, step: str) -> None:
     _update_job(db, job_id, progress=progress, current_step=step)
 
 
-# ---------------------------------------------------------------------------
-# Main orchestrator
-# ---------------------------------------------------------------------------
+def _persist_blueprint(
+    db,
+    *,
+    job_id: str,
+    clinic_id: str,
+    blueprint: Blueprint,  # noqa: ARG001 — kept for future derived persistence
+    storage_dict: dict,
+) -> None:
+    """Grava blueprint completo em la_blueprints.blueprint_json. Tabelas derivadas
+    (la_resources / la_services) ficam pra ponte la_* → sf_* — fora do escopo do LA V2."""
+    db.table("la_blueprints").insert({
+        "job_id": job_id,
+        "clinic_id": clinic_id,
+        "blueprint_json": storage_dict,
+        "knowledge_base_mapping": {},  # legacy NOT NULL, no longer used
+    }).execute()
+
 
 def run_analysis(
     job_id: str,
     clinic_id: str,
-    reference_conversation_ids: "list[str] | None" = None,
+    reference_conversation_ids: "Optional[list[str]]" = None,  # noqa: ARG001 — compat with main.py
 ) -> None:
     """
-    Full end-to-end pipeline executed after POST /analyze/{clinic_id} returns.
-    Called via FastAPI BackgroundTasks.add_task(run_analysis, job_id, clinic_id).
+    Pipeline V2 — 3 fases. Chamado via FastAPI BackgroundTasks após POST /analyze/{clinic_id}.
 
-    Args:
-        job_id:                      UUID of the la_analysis_jobs row
-        clinic_id:                   UUID of the clinic in sf_clinics
-        reference_conversation_ids:  Optional list of conversation identifiers
-                                     (phone numbers or source_filename values)
-                                     that admin selected as reference material
-                                     for service playbook generation.
-
-    Individual analysis steps (metrics, DSPy, shadow DNA, blueprint assembly)
-    are wrapped in try/except to produce degraded-but-valid output on partial
-    failures, rather than aborting the entire job.
-
-    A failure in infer_and_persist_resources() does NOT abort the job —
-    blueprint is saved and job marked done regardless.
-
-    Any unhandled exception from the core pipeline marks job status='error'.
+    Erros não tratados marcam job status=error.
     """
     db = get_db()
-
-    # Step 1: Mark job as processing
-    _update_job(db, job_id, status="processing", progress=5, current_step="Iniciando analise...")
+    _update_job(db, job_id, status="processing", progress=5, current_step="Iniciando análise...")
 
     try:
-        # Step 2: Resolve clinic name from sf_clinics
-        _set_progress(db, job_id, 10, "Buscando dados da clinica...")
+        # Fase 1 — Ingest
+        _set_progress(db, job_id, 10, "Buscando dados da clínica...")
         clinic_result = (
             db.table("sf_clinics")
             .select("id, name")
@@ -144,187 +100,102 @@ def run_analysis(
             .single()
             .execute()
         )
-        clinic_name = clinic_result.data["name"]
+        clinic_name = clinic_result.data["name"] or clinic_id
 
-        # Step 3: Lazy DSPy LM initialization (once per process)
-        _set_progress(db, job_id, 15, "Inicializando modelos de linguagem...")
-        try:
-            _ensure_lm_configured()
-        except Exception as e:
-            logger.warning("[%s] LM init failed (continuing with degraded analysis): %s", job_id[:8], e)
+        _set_progress(db, job_id, 15, "Inicializando modelo de linguagem...")
+        provider, model = _ensure_lm_configured()
 
-        # Step 4: Ingest conversations from Evolution
-        _set_progress(db, job_id, 20, "Importando conversas do Evolution...")
+        _set_progress(db, job_id, 25, "Importando conversas...")
         conversations = ingest_from_evolution(clinic_id, clinic_name)
-
-        # Step 5: Guard — zero conversations → fail fast with human-readable message
         if not conversations:
             _update_job(
-                db,
-                job_id,
+                db, job_id,
                 status="error",
-                error_message="Nenhuma conversa encontrada para essa clinica nos ultimos 90 dias.",
-                progress=20,
+                error_message="Nenhuma conversa encontrada para essa clínica nos últimos 90 dias.",
+                progress=25,
                 current_step="Falha: sem conversas",
             )
             return
 
-        # Step 6: Compute per-conversation metrics (resilient)
-        _set_progress(db, job_id, 30, "Calculando metricas das conversas...")
-        metrics_list = []
-        for conv in conversations:
-            try:
-                metrics_list.append(compute_metrics(conv))
-            except Exception as e:
-                logger.warning("[%s] compute_metrics failed for conversation: %s", job_id[:8], e)
+        message_count = sum(c.message_count for c in conversations)
+        logger.info(
+            "[%s] Ingested %d conversations / %d messages",
+            job_id[:8], len(conversations), message_count,
+        )
 
-        # Step 7: DSPy semantic analysis per conversation (35–70%) (resilient)
-        _set_progress(db, job_id, 35, "Analisando conversas com IA...")
-        analyses = []
-        for conv in conversations:
-            try:
-                analysis = analyze_conversation(conv.messages, clinic_name)
-                analyses.append(analysis)
-            except Exception as e:
-                logger.warning("[%s] DSPy analysis failed for conversation: %s", job_id[:8], e)
-                analyses.append(SemanticAnalysis(error=str(e)))
-        _set_progress(db, job_id, 70, "Analise semantica concluida...")
+        # Fase 2 — Extract DNA (1 ou N calls LLM, conforme volume)
+        # Estimativa fixa: 30s por chunk. Grava eta_finished_at (absoluto) uma
+        # única vez aqui — frontend faz a contagem regressiva derivada do clock.
+        from datetime import timedelta
+        from analyzer.chunker import DEFAULT_MAX_CONVS_PER_CHUNK
+        chunks_total = max(1, (len(conversations) + DEFAULT_MAX_CONVS_PER_CHUNK - 1) // DEFAULT_MAX_CONVS_PER_CHUNK)
+        SEC_PER_CHUNK = 30
+        eta_finished_at = (datetime.utcnow() + timedelta(seconds=chunks_total * SEC_PER_CHUNK)).isoformat() + "Z"
+        _update_job(
+            db, job_id,
+            progress=50,
+            current_step="Analisando conversas com IA...",
+            chunks_total=chunks_total,
+            chunks_done=0,
+            eta_finished_at=eta_finished_at,
+        )
 
-        # Step 8: Outcome detection per conversation (resilient)
-        _set_progress(db, job_id, 75, "Detectando desfechos das conversas...")
-        outcome_results = []
-        for conv in conversations:
-            try:
-                result = detect_outcome(conv.messages, clinic_name)
-                outcome_results.append(result)
-            except Exception as e:
-                logger.warning("[%s] Outcome detection failed for conversation: %s", job_id[:8], e)
-
-        # Step 9: Extract Shadow DNA — MUST precede infer_and_persist_resources (resilient)
-        _set_progress(db, job_id, 80, "Extraindo perfil comportamental (Shadow DNA)...")
-        try:
-            shadow_dna = extract_shadow_dna(conversations, clinic_name, analyses)
-        except Exception as e:
-            logger.warning("[%s] extract_shadow_dna failed (using empty fallback): %s", job_id[:8], e)
-            shadow_dna = ShadowDNA()
-
-        # Step 9b: Infer returning-patient playbook (resilient, non-blocking)
-        try:
-            returning_patient_playbook = extract_returning_patient_playbook(conversations)
-        except Exception as e:
-            logger.warning("[%s] extract_returning_patient_playbook failed (skipping): %s", job_id[:8], e)
-            returning_patient_playbook = None
-
-        # Step 9c: Infer clinic playbook (forensic — resilient, non-blocking)
-        try:
-            clinic_playbook = extract_clinic_playbook(
-                conversations,
-                clinic_name,
-                outcome_results=outcome_results,
+        def _on_chunk_progress(done: int, total: int, _eta: int) -> None:
+            step = (
+                f"Analisando conversas ({done}/{total})"
+                if total > 1
+                else "Analisando conversas com IA..."
             )
-        except Exception as e:
-            logger.warning("[%s] extract_clinic_playbook failed (skipping): %s", job_id[:8], e)
-            clinic_playbook = None
-
-        # Step 9d: Infer per-service playbooks (resilient, non-blocking)
-        try:
-            service_playbooks = extract_service_playbooks(
-                conversations,
-                services=shadow_dna.local_procedures,
-                reference_ids=reference_conversation_ids,
-                outcome_results=outcome_results,
-            )
-        except Exception as e:
-            logger.warning("[%s] extract_service_playbooks failed (skipping): %s", job_id[:8], e)
-            service_playbooks = []
-
-        # Step 10: Aggregate outcomes (resilient)
-        _set_progress(db, job_id, 85, "Agregando desfechos...")
-        try:
-            outcome_summary = aggregate_outcomes(outcome_results)
-        except Exception as e:
-            logger.warning("[%s] aggregate_outcomes failed (using empty fallback): %s", job_id[:8], e)
-            outcome_summary = OutcomeSummary()
-
-        # Step 11: Compute financial KPIs (resilient)
-        _set_progress(db, job_id, 87, "Calculando KPIs financeiros...")
-        try:
-            financial_kpis = compute_financial_kpis(
-                outcome_summary,
-                shadow_dna=shadow_dna,
-                clinic_name=clinic_name,
-            )
-        except Exception as e:
-            logger.warning("[%s] compute_financial_kpis failed (using empty fallback): %s", job_id[:8], e)
-            financial_kpis = FinancialKPIs()
-
-        # Step 12: Aggregate metrics (resilient)
-        _set_progress(db, job_id, 90, "Consolidando metricas...")
-        try:
-            agg_metrics = aggregate_metrics(metrics_list)
-        except Exception as e:
-            logger.warning("[%s] aggregate_metrics failed (using empty fallback): %s", job_id[:8], e)
-            agg_metrics = AggregatedMetrics()
-
-        # Step 13: Build blueprint dict (resilient)
-        _set_progress(db, job_id, 92, "Montando blueprint...")
-        try:
-            blueprint_dict = build_blueprint(
-                client_slug=clinic_id,
-                client_name=clinic_name,
-                shadow_dna=shadow_dna,
-                outcome_summary=outcome_summary,
-                financial_kpis=financial_kpis,
-                agg_metrics=agg_metrics,
-                analyses=analyses,
-                generated_at=datetime.utcnow(),
-                returning_patient_playbook=returning_patient_playbook,
-                clinic_playbook=clinic_playbook,
-                service_playbooks=service_playbooks,
-            )
-        except Exception as e:
-            logger.warning("[%s] build_blueprint failed (using empty fallback): %s", job_id[:8], e)
-            blueprint_dict = {
-                "clinic_id": clinic_id,
-                "error": str(e),
-                "generated_at": datetime.utcnow().isoformat(),
-            }
-
-        # Step 14: INSERT blueprint to la_blueprints with clinic_id
-        _set_progress(db, job_id, 95, "Salvando blueprint...")
-        db.table("la_blueprints").insert({
-            "job_id": job_id,
-            "clinic_id": clinic_id,
-            "blueprint": blueprint_dict,
-        }).execute()
-
-        # Step 15: Infer and persist resources — NON-BLOCKING
-        _set_progress(db, job_id, 97, "Inferindo profissionais e servicos...")
-        try:
-            infer_and_persist_resources(
-                conversations,
-                clinic_name,
-                clinic_id,
-                job_id,
-                shadow_dna,
-                db,
-            )
-        except Exception as e:
-            logger.warning(
-                "[%s] Resources inference failed (non-blocking): %s",
-                job_id[:8],
-                e,
+            _update_job(
+                db, job_id,
+                current_step=step,
+                chunks_done=done,
+                progress=50 + int(40 * (done / total)) if total else 50,
             )
 
-        # Step 16: Mark job done + flip clinic onboarding to sync_complete
-        _update_job(db, job_id, status="done", progress=100, current_step="Concluido")
-        db.table("sf_clinics").update({
-            "onboarding_status": "sync_complete",
-        }).eq("id", clinic_id).execute()
+        blueprint = extract_blueprint_chunked(
+            conversations,
+            clinic_name,
+            on_progress=_on_chunk_progress,
+        )
+
+        # Fase 3 — Persist
+        _set_progress(db, job_id, 90, "Salvando blueprint...")
+        storage_dict = to_storage_dict(
+            blueprint,
+            clinic_id=clinic_id,
+            clinic_name=clinic_name,
+            conversation_count=len(conversations),
+            message_count=message_count,
+            llm_provider=provider,
+            llm_model=model,
+        )
+        _persist_blueprint(
+            db,
+            job_id=job_id,
+            clinic_id=clinic_id,
+            blueprint=blueprint,
+            storage_dict=storage_dict,
+        )
+
+        # Auto-migra blueprint → sf_* (perfil, profissionais, especialidades,
+        # serviços, mapeamento, tom da assistente). Aprovação por domínio é
+        # feita depois pelo usuário via UI (sf_clinics.onboarding_review).
+        _set_progress(db, job_id, 95, "Atualizando dados da clínica...")
+        try:
+            sync_blueprint_to_sf(db, clinic_id, blueprint)
+        except Exception as e:
+            # Sync falhou. Mantém blueprint salvo + marca job error.
+            logger.error("[%s] sf_sync failed: %s", job_id[:8], e, exc_info=True)
+            raise
+
+        # Mark done. LA não toca em sf_clinics.onboarding_status — quem
+        # orquestra é o n8n (via legacy-analyzer-trigger workflow).
+        _update_job(db, job_id, status="done", progress=100, current_step="Concluído")
         logger.info("[%s] Pipeline complete for clinic %s", job_id[:8], clinic_id)
 
     except Exception as exc:
-        logger.error("[%s] Pipeline failed: %s", job_id[:8], exc)
+        logger.error("[%s] Pipeline failed: %s", job_id[:8], exc, exc_info=True)
         try:
             db.table("la_analysis_jobs").update({
                 "status": "error",
