@@ -5,7 +5,11 @@ Pipeline V2 do Legacy Analyzer — 3 fases:
   1. Ingest   — lê todas as Messages da clínica via evolution_ingestor
   2. Extract  — 1 call DSPy (Gemini 2.5 Flash default) → Blueprint completo
   3. Persist  — grava em la_blueprints, popula la_resources/la_services derivados,
-                marca job done, flipa sf_clinics.onboarding_status='sync_complete'
+                marca job done
+
+Step orchestration:
+  - sf_clinics.onboarding_step → 'learning' no início do run
+  - sf_clinics.onboarding_step → 'review' ao terminar com sucesso
 
 Tudo o que era pipeline antigo (sentiment/quality/outcomes/KPIs/shadow DNA)
 foi removido — git history em main protege.
@@ -89,6 +93,13 @@ def run_analysis(
     """
     db = get_db()
     _update_job(db, job_id, status="processing", progress=5, current_step="Iniciando análise...")
+
+    # Promote clinic step → 'learning' (HerModal screen 7 will keep showing
+    # while the LA runs; reload mid-run resumes there).
+    try:
+        db.table("sf_clinics").update({"onboarding_step": "learning"}).eq("id", clinic_id).execute()
+    except Exception as e:
+        logger.warning("[%s] failed to set onboarding_step=learning: %s", job_id[:8], e)
 
     try:
         # Fase 1 — Ingest
@@ -189,8 +200,13 @@ def run_analysis(
             logger.error("[%s] sf_sync failed: %s", job_id[:8], e, exc_info=True)
             raise
 
-        # Mark done. LA não toca em sf_clinics.onboarding_status — quem
-        # orquestra é o n8n (via legacy-analyzer-trigger workflow).
+        # Promote clinic step → 'review' (LA finished; user can now approve
+        # the 6 domains in the dashboard).
+        try:
+            db.table("sf_clinics").update({"onboarding_step": "review"}).eq("id", clinic_id).execute()
+        except Exception as e:
+            logger.warning("[%s] failed to set onboarding_step=review: %s", job_id[:8], e)
+
         _update_job(db, job_id, status="done", progress=100, current_step="Concluído")
         logger.info("[%s] Pipeline complete for clinic %s", job_id[:8], clinic_id)
 
