@@ -31,3 +31,6 @@ anyio==4.8.0
 python-dateutil==2.9.0
 pytz==2024.2
 tqdm==4.67.1
+
+# Observability
+sentry-sdk[fastapi]==2.20.0

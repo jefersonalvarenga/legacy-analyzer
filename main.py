@@ -15,7 +15,9 @@ analyzer/analysis_runner.py (3 phases). Provider selection via LLM_PROVIDER env.
 from __future__ import annotations
 
 import logging
+import os
 
+import sentry_sdk
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -29,6 +31,23 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Sentry / GlitchTip — errors only for MVP. No-op when SENTRY_DSN unset.
+_sentry_dsn = os.environ.get("SENTRY_DSN")
+if _sentry_dsn:
+    def _scrub_pii(event, _hint):
+        # Backstop: drop the full request body (might contain message
+        # content). Primary policy is "never put PII in tags/extra".
+        if event.get("request", {}).get("data") is not None:
+            event["request"]["data"] = None
+        return event
+
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        traces_sample_rate=0,
+        send_default_pii=False,
+        before_send=_scrub_pii,
+    )
 
 settings = get_settings()
 app = FastAPI(
