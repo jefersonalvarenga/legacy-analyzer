@@ -31,6 +31,7 @@ from analyzer.blueprint_v2 import (
 )
 from analyzer.chunker import extract_blueprint_chunked
 from analyzer.sf_sync import sync_blueprint_to_sf
+from analyzer.structured_log import slog
 
 logger = logging.getLogger(__name__)
 
@@ -93,13 +94,15 @@ def run_analysis(
     """
     db = get_db()
     _update_job(db, job_id, status="processing", progress=5, current_step="Iniciando análise...")
+    slog("la.run.started", clinic_id=clinic_id, job_id=job_id)
 
     # Promote clinic step → 'learning' (HerModal screen 7 will keep showing
     # while the LA runs; reload mid-run resumes there).
     try:
         db.table("sf_clinics").update({"onboarding_step": "learning"}).eq("id", clinic_id).execute()
+        slog("onboarding.step.transition", clinic_id=clinic_id, job_id=job_id, to="learning")
     except Exception as e:
-        logger.warning("[%s] failed to set onboarding_step=learning: %s", job_id[:8], e)
+        slog("onboarding.step.transition_failed", clinic_id=clinic_id, job_id=job_id, to="learning", error=str(e), level="warn")
 
     try:
         # Fase 1 — Ingest
@@ -126,6 +129,7 @@ def run_analysis(
                 progress=25,
                 current_step="Falha: sem conversas",
             )
+            slog("la.run.failed", clinic_id=clinic_id, job_id=job_id, reason="no_conversations", level="error")
             return
 
         message_count = sum(c.message_count for c in conversations)
@@ -197,21 +201,23 @@ def run_analysis(
             sync_blueprint_to_sf(db, clinic_id, blueprint)
         except Exception as e:
             # Sync falhou. Mantém blueprint salvo + marca job error.
-            logger.error("[%s] sf_sync failed: %s", job_id[:8], e, exc_info=True)
+            slog("la.sf_sync.failed", clinic_id=clinic_id, job_id=job_id, error=str(e), level="error")
             raise
 
         # Promote clinic step → 'review' (LA finished; user can now approve
         # the 6 domains in the dashboard).
         try:
             db.table("sf_clinics").update({"onboarding_step": "review"}).eq("id", clinic_id).execute()
+            slog("onboarding.step.transition", clinic_id=clinic_id, job_id=job_id, to="review")
         except Exception as e:
-            logger.warning("[%s] failed to set onboarding_step=review: %s", job_id[:8], e)
+            slog("onboarding.step.transition_failed", clinic_id=clinic_id, job_id=job_id, to="review", error=str(e), level="warn")
 
         _update_job(db, job_id, status="done", progress=100, current_step="Concluído")
-        logger.info("[%s] Pipeline complete for clinic %s", job_id[:8], clinic_id)
+        slog("la.run.completed", clinic_id=clinic_id, job_id=job_id,
+             conversation_count=len(conversations), message_count=message_count)
 
     except Exception as exc:
-        logger.error("[%s] Pipeline failed: %s", job_id[:8], exc, exc_info=True)
+        slog("la.run.failed", clinic_id=clinic_id, job_id=job_id, error=str(exc), level="error")
         try:
             db.table("la_analysis_jobs").update({
                 "status": "error",
