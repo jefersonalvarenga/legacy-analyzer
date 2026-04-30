@@ -144,7 +144,7 @@ def run_analysis(
         from datetime import timedelta
         from analyzer.chunker import DEFAULT_MAX_CONVS_PER_CHUNK
         chunks_total = max(1, (len(conversations) + DEFAULT_MAX_CONVS_PER_CHUNK - 1) // DEFAULT_MAX_CONVS_PER_CHUNK)
-        SEC_PER_CHUNK = 30
+        SEC_PER_CHUNK = 60
         eta_finished_at = (datetime.utcnow() + timedelta(seconds=chunks_total * SEC_PER_CHUNK)).isoformat() + "Z"
         _update_job(
             db, job_id,
