@@ -87,16 +87,6 @@ class AnalyzeResponse(BaseModel):
 
 
 # ------------------------------------------------------------------
-# Smoke test for Sentry/GlitchTip wiring. GET this once after deploy
-# to confirm the SDK reaches GlitchTip > Issues. Remove afterwards.
-# ------------------------------------------------------------------
-
-@app.get("/test-error")
-def test_error():
-    raise RuntimeError("LA Sentry smoke test — if you see this in GlitchTip, the SDK is wired correctly.")
-
-
-# ------------------------------------------------------------------
 # Health
 # ------------------------------------------------------------------
 
